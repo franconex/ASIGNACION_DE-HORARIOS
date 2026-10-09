@@ -33,7 +33,7 @@ import { CATEGORIAS_EVENTO } from './reserva-form.component';
       @if (auth.puedeEditar()) {
         @for (t of catalogos.tiposReserva(); track t.id) {
           <button class="btn-secundario" (click)="paneles.abrirReserva(null, { tipoId: t.id })">
-            <app-icono [nombre]="t.codigo === 'DEFENSA' ? 'defensa' : t.codigo === 'MANTENIMIENTO' ? 'mantenimiento' : 'evento'" [tamano]="16" [style.color]="t.color" /> {{ t.nombre }}
+            <app-icono [nombre]="t.codigo === 'DEFENSA' ? 'defensa' : t.codigo === 'MANTENIMIENTO' ? 'mantenimiento' : 'evento'" [tamano]="16" class="color-dinamico" [style.color]="t.color" /> {{ t.nombre }}
           </button>
         }
       }
@@ -44,7 +44,7 @@ import { CATEGORIAS_EVENTO } from './reserva-form.component';
         <div class="tarjeta flex flex-col p-4" [style.border-left]="'4px solid ' + (r.tipo?.color ?? '#dc2626')">
           <div class="mb-2 flex items-start justify-between gap-2">
             <div>
-              <span class="chip mb-1" [style.background]="(r.tipo?.color ?? '#dc2626') + '22'" [style.color]="r.tipo?.color">{{ r.tipo?.nombre }}{{ textoCategoria(r) }}</span>
+              <span class="color-dinamico chip mb-1" [style.background]="(r.tipo?.color ?? '#dc2626') + '22'" [style.color]="r.tipo?.color">{{ r.tipo?.nombre }}{{ textoCategoria(r) }}</span>
               <p class="font-semibold">{{ r.titulo }}</p>
               @if (r.responsable) { <p class="text-xs text-slate-500">{{ r.responsable }}</p> }
             </div>

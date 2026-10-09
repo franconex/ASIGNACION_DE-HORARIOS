@@ -82,9 +82,9 @@ export function agruparHorarios(horarios: AsignacionHorario[]): GrupoHorario[] {
                 @if (a.observacion) { <p class="text-xs text-amber-700">{{ a.observacion }}</p> }
               </td>
               <td>{{ a.docente?.apellidos }} {{ a.docente?.nombres }}</td>
-              <td><span class="chip" [style.background]="(a.carrera?.color ?? '#64748b') + '22'" [style.color]="a.carrera?.color">{{ a.carrera?.sigla || a.carrera?.nombre }}</span></td>
+              <td><span class="color-dinamico chip" [style.background]="(a.carrera?.color ?? '#64748b') + '22'" [style.color]="a.carrera?.color">{{ a.carrera?.sigla || a.carrera?.nombre }}</span></td>
               <td class="whitespace-nowrap">
-                <span class="chip" [style.background]="colorSistema(a) + '1a'" [style.color]="colorSistema(a)">{{ nombreSistema(a) }}</span>
+                <span class="color-dinamico chip" [style.background]="colorSistema(a) + '1a'" [style.color]="colorSistema(a)">{{ nombreSistema(a) }}</span>
                 <p class="mt-0.5 text-xs text-slate-500">
                   {{ fechaCorta(a.fecha_inicio) }} – {{ fechaCorta(a.fecha_fin) }}
                   @if (a.fechas?.length) { · {{ a.fechas?.length }} días }
@@ -95,7 +95,7 @@ export function agruparHorarios(horarios: AsignacionHorario[]): GrupoHorario[] {
                   @for (g of grupos(a); track $index) {
                     <span class="chip bg-slate-100 text-slate-700">
                       <b>{{ textoDias(g.dias) }}</b> {{ hhmm(g.horaInicio) }}–{{ hhmm(g.horaFin) }}
-                      <span class="rounded bg-superficie px-1 font-semibold" [style.color]="catalogos.mapaAmbientes().get(g.ambienteId)?.color">{{ catalogos.codigoAmbiente(g.ambienteId) }}</span>
+                      <span class="color-dinamico rounded bg-superficie px-1 font-semibold" [style.color]="catalogos.mapaAmbientes().get(g.ambienteId)?.color">{{ catalogos.codigoAmbiente(g.ambienteId) }}</span>
                     </span>
                   }
                 </div>

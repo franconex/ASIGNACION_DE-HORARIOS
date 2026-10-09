@@ -16,7 +16,7 @@ interface FichaEdicion extends FichaReparacion {
 const ESTADOS: { valor: EstadoPc; texto: string; clase: string; punto: string }[] = [
   { valor: 'operativa', texto: 'Activa', clase: 'border-emerald-500 bg-emerald-600 text-white', punto: 'bg-emerald-500' },
   { valor: 'mantenimiento', texto: 'Mantenimiento', clase: 'border-amber-500 bg-amber-500 text-white', punto: 'bg-amber-400' },
-  { valor: 'inactiva', texto: 'Inactiva', clase: 'border-slate-500 bg-slate-500 text-white', punto: 'bg-slate-400' },
+  { valor: 'inactiva', texto: 'Inactiva', clase: 'border-slate-500 bg-slate-500 text-white dark:border-slate-400 dark:bg-slate-300', punto: 'bg-slate-400' },
   { valor: 'baja', texto: 'De baja', clase: 'border-rose-500 bg-rose-600 text-white', punto: 'bg-rose-500' },
 ];
 

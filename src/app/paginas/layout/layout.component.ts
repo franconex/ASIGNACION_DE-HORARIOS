@@ -31,13 +31,13 @@ interface ItemMenu {
       }
 
       <!-- Menú lateral -->
-      <aside class="fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-marca-900 text-slate-300 transition-transform lg:static lg:translate-x-0"
+      <aside class="fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-marca-900 text-white/75 transition-transform lg:static lg:translate-x-0"
              [class.-translate-x-full]="!menuAbierto()">
         <div class="flex items-center gap-3 px-5 py-5">
           <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white"><app-icono nombre="laboratorio" [tamano]="22" /></div>
           <div>
             <p class="leading-tight font-bold text-white">Laboratorios</p>
-            <p class="text-xs text-slate-400">UPDS · Asignación</p>
+            <p class="text-xs text-white/55">UPDS · Asignación</p>
           </div>
         </div>
 
@@ -66,7 +66,7 @@ interface ItemMenu {
           <div class="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white">{{ iniciales() }}</div>
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-white">{{ auth.perfil()?.nombre_completo }}</p>
-            <p class="text-xs text-slate-400 capitalize">{{ auth.perfil()?.rol }}</p>
+            <p class="text-xs text-white/55 capitalize">{{ auth.perfil()?.rol }}</p>
           </div>
           <button class="rounded-md p-2 hover:bg-white/10 hover:text-white" (click)="tema.alternar()"
                   [title]="tema.modo() === 'oscuro' ? 'Modo claro' : 'Modo oscuro'" [attr.aria-label]="tema.modo() === 'oscuro' ? 'Activar modo claro' : 'Activar modo oscuro'">

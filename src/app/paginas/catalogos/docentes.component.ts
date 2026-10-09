@@ -57,7 +57,7 @@ interface FormDocente {
               <td>
                 <div class="flex flex-wrap gap-1">
                   @for (c of d.docente_carreras ?? []; track c.carrera_id) {
-                    <span class="chip" [style.background]="colorCarrera(c.carrera_id) + '22'" [style.color]="colorCarrera(c.carrera_id)">{{ siglaCarrera(c.carrera_id) }}</span>
+                    <span class="color-dinamico chip" [style.background]="colorCarrera(c.carrera_id) + '22'" [style.color]="colorCarrera(c.carrera_id)">{{ siglaCarrera(c.carrera_id) }}</span>
                   }
                 </div>
               </td>

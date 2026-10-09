@@ -65,7 +65,7 @@ export const RESULTADOS_CORRECTIVO = [
   { valor: 'reparada', texto: 'Reparada', ayuda: 'La PC queda Activa', clase: 'border-emerald-500 bg-emerald-600 text-white' },
   { valor: 'sigue', texto: 'Sigue en mantenimiento', ayuda: 'La PC queda en Mantenimiento', clase: 'border-amber-500 bg-amber-500 text-white' },
   { valor: 'requiere_baja', texto: 'Dar de baja', ayuda: 'La PC queda de baja y sale en tu cierre de turno', clase: 'border-rose-500 bg-rose-600 text-white' },
-  { valor: 'inactiva', texto: 'Inactiva', ayuda: 'La PC queda Inactiva', clase: 'border-slate-500 bg-slate-500 text-white' },
+  { valor: 'inactiva', texto: 'Inactiva', ayuda: 'La PC queda Inactiva', clase: 'border-slate-500 bg-slate-500 text-white dark:border-slate-400 dark:bg-slate-300' },
 ];
 
 /** Grupos del catálogo de fallas */

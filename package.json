@@ -9,6 +9,9 @@
     "test": "ng test"
   },
   "private": true,
+  "engines": {
+    "node": ">=22.12"
+  },
   "packageManager": "npm@12.2.0",
   "dependencies": {
     "@angular/common": "^22.2.0",

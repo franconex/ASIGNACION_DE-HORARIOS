@@ -80,7 +80,7 @@ interface FormTicket extends Partial<Atencion> {
               <span class="min-w-40 flex-1">{{ s.motivo }}</span>
               <span class="text-xs text-slate-400">{{ s.autor?.nombre_completo }} · {{ s.solicitado_en | date: 'dd/MM HH:mm' }}</span>
               @if (auth.puedeGestionarAuxiliares()) {
-                <button class="btn-sm rounded-lg bg-rose-600 px-3 text-white hover:bg-rose-700" (click)="resolverBaja(s, true)">Dar de baja</button>
+                <button class="btn-sm rounded-lg bg-rose-600 px-3 text-white hover:bg-rose-700 dark:hover:bg-rose-500" (click)="resolverBaja(s, true)">Dar de baja</button>
                 <button class="btn-secundario btn-sm" (click)="resolverBaja(s, false)">Rechazar</button>
               } @else {
                 <span class="chip bg-amber-100 text-amber-800">Esperando al encargado</span>
@@ -282,7 +282,7 @@ interface FormTicket extends Partial<Atencion> {
                           [class]="f.tipo === t.valor ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-slate-300 hover:bg-slate-50'"
                           [attr.aria-pressed]="f.tipo === t.valor" (click)="elegirTipo(f, t.valor)">
                     <span class="block text-sm font-semibold">{{ t.texto }}</span>
-                    <span class="block text-xs" [class]="f.tipo === t.valor ? 'text-indigo-100' : 'text-slate-500'">{{ t.ayuda }}</span>
+                    <span class="block text-xs" [class]="f.tipo === t.valor ? 'text-white/80' : 'text-slate-500'">{{ t.ayuda }}</span>
                   </button>
                 }
               </div>

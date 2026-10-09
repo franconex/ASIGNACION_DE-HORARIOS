@@ -11,7 +11,7 @@ import { AuthService } from '../../core/auth.service';
   selector: 'app-login',
   imports: [FormsModule, IconoComponent],
   template: `
-    <div class="flex min-h-full items-center justify-center bg-gradient-to-br from-marca-900 via-marca-700 to-marca-500 p-4">
+    <div class="flex min-h-full items-center justify-center bg-gradient-to-br from-marca-900 via-marca-700 to-marca-500 dark:from-[#0b1222] dark:via-marca-900 dark:to-marca-300 p-4">
       <div class="w-full max-w-sm">
         <div class="mb-6 text-center text-white">
           <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 text-white backdrop-blur"><app-icono nombre="laboratorio" [tamano]="28" /></div>

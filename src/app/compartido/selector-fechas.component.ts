@@ -195,7 +195,7 @@ export class SelectorFechasComponent {
   protected claseCelda(c: CeldaDia): string {
     if (!c.delMes) return 'invisible';
     if (c.seleccionado && this.resaltadas().has(c.fecha)) return 'bg-amber-500 font-semibold text-white ring-2 ring-amber-300 hover:bg-amber-600';
-    if (c.seleccionado && c.habilitado) return 'bg-marca-600 font-semibold text-white hover:bg-marca-700';
+    if (c.seleccionado && c.habilitado) return 'bg-marca-600 font-semibold text-white hover:bg-marca-700 dark:hover:bg-marca-500';
     if (c.seleccionado) return 'bg-marca-100 font-medium text-marca-700';
     if (c.habilitado) return 'text-slate-700 hover:bg-marca-50';
     return c.feriado ? 'text-slate-300 line-through' : 'text-slate-300';

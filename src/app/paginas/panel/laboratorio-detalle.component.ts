@@ -138,7 +138,7 @@ import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
                   <p class="font-semibold">{{ a.materia?.nombre }}{{ a.grupo ? ' · Gr. ' + a.grupo : '' }}</p>
                   <p class="text-sm text-slate-600">{{ a.docente?.apellidos }} {{ a.docente?.nombres }}</p>
                   <p class="mt-1 flex flex-wrap gap-1">
-                    <span class="chip" [style.background]="colorSistema(a) + '1a'" [style.color]="colorSistema(a)">{{ textoFechas(a) }}</span>
+                    <span class="color-dinamico chip" [style.background]="colorSistema(a) + '1a'" [style.color]="colorSistema(a)">{{ textoFechas(a) }}</span>
                     @for (h of a.horarios ?? []; track h.id) {
                       <span class="chip bg-slate-100 text-slate-700">{{ diasCortos[h.dia_semana] }} {{ hhmm(h.hora_inicio) }}–{{ hhmm(h.hora_fin) }}</span>
                     }

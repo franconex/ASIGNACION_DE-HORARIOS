@@ -22,6 +22,10 @@ const FIN_DIA = 22 * 60;
 const PX_MINUTO = 1;
 /** Las selecciones se ajustan a cuartos de hora */
 const PASO = 15;
+/** Con el dedo: tiempo que hay que mantener presionado para empezar a seleccionar */
+const ESPERA_TACTIL = 350;
+/** Con el dedo: cuánto puede moverse antes de considerarse un desplazamiento */
+const TOLERANCIA_TACTIL = 10;
 
 /** Celda del calendario mensual */
 interface DiaMes {
@@ -128,7 +132,7 @@ interface Tramo {
               <b class="text-emerald-700">{{ sinUso() }}</b> de {{ laboratorios().length }} laboratorios sin nada agendado.
             }
             @if (auth.puedeEditar() && !esPasado()) {
-              <span class="text-slate-500">{{ tactil ? 'Toque' : 'Arrastre' }} para asignar; sobre una clase podrá crear un evento (reubica al docente).</span>
+              <span class="text-slate-500">{{ tactil ? 'Toque, o mantenga presionado y deslice,' : 'Arrastre' }} para asignar; sobre una clase podrá crear un evento (reubica al docente).</span>
             }
             @if (totalConflictos()) {
               <span class="ml-1 inline-flex items-center gap-1 rounded bg-red-50 px-1.5 text-sm text-red-700">
@@ -164,9 +168,9 @@ interface Tramo {
 
             <!-- Columnas de laboratorios -->
             @for (a of laboratorios(); track a.id) {
-              <div class="relative touch-pan-x touch-pan-y border-l border-slate-200 select-none" [style.height.px]="altoGrilla"
+              <div class="relative touch-pan-x touch-pan-y border-l border-slate-200 select-none [-webkit-touch-callout:none]" [style.height.px]="altoGrilla"
                    [style.background-image]="fondoHoras" [style.background-size]="'100% ' + 60 * px + 'px'"
-                   [class.cursor-crosshair]="puedeSeleccionar(a)" (pointerdown)="iniciarSeleccion($event, a)">
+                   [class.cursor-crosshair]="puedeSeleccionar(a)" (pointerdown)="iniciarSeleccion($event, a)" (contextmenu)="puedeSeleccionar(a) && $event.preventDefault()">
                 <!-- Horas pasadas -->
                 @if (minutosPasados() > inicioDia) {
                   <div class="pointer-events-none absolute inset-x-0 top-0 bg-slate-100/80" [style.height.px]="(minutosPasados() - inicioDia) * px"></div>
@@ -281,7 +285,19 @@ export class PanelDiaComponent implements OnDestroy {
   /** El tramo elegido pisa una o más clases: solo se puede crear un evento (reubica) */
   protected readonly soloEvento = signal(false);
 
-  private arrastre: { columna: HTMLElement; ambiente: Ambiente; origen: number; movio: boolean } | null = null;
+  /**
+   * movio: la selección se extendió más allá del minuto inicial.
+   * activo: con el dedo, ya se mantuvo presionado y se está seleccionando (no desplazando).
+   */
+  private arrastre: {
+    columna: HTMLElement; ambiente: Ambiente; origen: number; movio: boolean;
+    activo: boolean; x: number; y: number; espera?: ReturnType<typeof setTimeout>;
+  } | null = null;
+
+  /** Mientras se selecciona con el dedo, la grilla no debe desplazarse */
+  private readonly bloquearDesplazamiento = (evento: TouchEvent): void => {
+    if (this.arrastre?.activo) evento.preventDefault();
+  };
 
   private readonly temporizador = setInterval(() => {
     this.horaAhora.set(horaActual(environment.zonaHoraria));
@@ -331,6 +347,7 @@ export class PanelDiaComponent implements OnDestroy {
   protected readonly sinUso = computed(() => this.laboratorios().filter((a) => !this.ocupacionesDe(a.id).length).length);
 
   constructor() {
+    document.addEventListener('touchmove', this.bloquearDesplazamiento, { passive: false });
     effect(() => {
       this.fecha();
       this.paneles.cambios();
@@ -344,6 +361,8 @@ export class PanelDiaComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    document.removeEventListener('touchmove', this.bloquearDesplazamiento);
+    this.cancelarSeleccion();
     clearInterval(this.temporizador);
   }
 
@@ -506,28 +525,50 @@ export class PanelDiaComponent implements OnDestroy {
       evento.preventDefault();
       const ancla = minuto >= actual.fin ? actual.inicio : actual.fin;
       this.seleccion.set({ ambienteId: a.id, inicio: Math.min(ancla, minuto), fin: Math.max(ancla, minuto + PASO) });
-      this.arrastre = { columna, ambiente: a, origen: ancla, movio: true };
+      this.arrastre = { columna, ambiente: a, origen: ancla, movio: true, activo: true, x: evento.clientX, y: evento.clientY };
       return;
     }
-    this.arrastre = { columna, ambiente: a, origen: minuto, movio: false };
-    // Con el dedo no se arrastra (se desplaza la grilla): un toque elige un tramo
+    const arrastre: NonNullable<typeof this.arrastre> = { columna, ambiente: a, origen: minuto, movio: false, activo: false, x: evento.clientX, y: evento.clientY };
+    this.arrastre = arrastre;
     if (evento.pointerType === 'mouse') {
       evento.preventDefault();
+      arrastre.activo = true;
       this.seleccion.set({ ambienteId: a.id, inicio: minuto, fin: minuto + PASO });
+      return;
     }
+    // Con el dedo: deslizar desplaza la grilla; mantener presionado empieza a seleccionar
+    arrastre.espera = setTimeout(() => {
+      if (this.arrastre !== arrastre) return;
+      arrastre.activo = true;
+      this.seleccion.set({ ambienteId: a.id, inicio: minuto, fin: minuto + PASO });
+      navigator.vibrate?.(15);
+    }, ESPERA_TACTIL);
   }
 
   @HostListener('document:pointermove', ['$event'])
   protected moverSeleccion(evento: PointerEvent): void {
-    if (!this.arrastre) return;
-    if (evento.pointerType !== 'mouse') {
-      this.arrastre.movio = true; // el dedo se movió: era un desplazamiento, no un toque
+    const arrastre = this.arrastre;
+    if (!arrastre) return;
+    if (!arrastre.activo) {
+      // El dedo se movió antes de terminar la espera: es un desplazamiento, no una selección
+      if (Math.hypot(evento.clientX - arrastre.x, evento.clientY - arrastre.y) > TOLERANCIA_TACTIL) this.cancelarSeleccion();
       return;
     }
-    const minuto = this.minutoEn(evento, this.arrastre.columna);
-    const { origen, ambiente } = this.arrastre;
-    if (minuto !== origen) this.arrastre.movio = true;
+    if (evento.pointerType !== 'mouse') this.desplazarEnBorde(evento, arrastre.columna);
+    const minuto = this.minutoEn(evento, arrastre.columna);
+    const { origen, ambiente } = arrastre;
+    if (minuto !== origen) arrastre.movio = true;
     this.seleccion.set({ ambienteId: ambiente.id, inicio: Math.min(origen, minuto), fin: Math.max(origen, minuto) + PASO });
+  }
+
+  /** Con el dedo cerca del borde de la grilla, la desplaza para poder seguir seleccionando */
+  private desplazarEnBorde(evento: PointerEvent, columna: HTMLElement): void {
+    const contenedor = columna.closest<HTMLElement>('.overflow-auto');
+    if (!contenedor) return;
+    const caja = contenedor.getBoundingClientRect();
+    const margen = 48;
+    if (evento.clientY < caja.top + margen + 50) contenedor.scrollBy(0, -12); // 50: encabezado fijo
+    else if (evento.clientY > caja.bottom - margen) contenedor.scrollBy(0, 12);
   }
 
   @HostListener('document:pointerup', ['$event'])
@@ -535,9 +576,9 @@ export class PanelDiaComponent implements OnDestroy {
     const arrastre = this.arrastre;
     this.arrastre = null;
     if (!arrastre) return;
+    clearTimeout(arrastre.espera);
     const actual = this.seleccion();
     this.seleccion.set(null);
-    if (evento.pointerType !== 'mouse' && arrastre.movio) return;
     // Clic o toque sin arrastrar: bloque libre de ese momento o, si cae sobre una clase, su horario (para un evento)
     const tramo = arrastre.movio && actual ? actual
       : (this.tramoSugerido(arrastre.ambiente, arrastre.origen) ?? this.tramoClaseEn(arrastre.ambiente, arrastre.origen));
@@ -553,6 +594,7 @@ export class PanelDiaComponent implements OnDestroy {
 
   @HostListener('document:pointercancel')
   protected cancelarSeleccion(): void {
+    clearTimeout(this.arrastre?.espera);
     this.arrastre = null;
     this.seleccion.set(null);
   }
