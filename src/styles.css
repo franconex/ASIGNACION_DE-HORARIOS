@@ -1,0 +1,136 @@
+@import 'tailwindcss';
+
+/* =====================================================================
+   Tema global del sistema (Tailwind v4 + componentes propios)
+   ===================================================================== */
+/* Modo oscuro por clase en <html class="oscuro"> */
+@custom-variant dark (&:where(.oscuro, .oscuro *));
+
+@theme {
+  /* Superficies semánticas (cambian con el modo oscuro) */
+  --color-fondo: #f2f4f7;
+  --color-superficie: #ffffff;
+
+  /* Tipografía técnica, legible en tablas y horarios */
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+
+  /* Marca: azul pizarra (acciones y ocupación) */
+  --color-marca-50: #eef1fa;
+  --color-marca-100: #dce3f5;
+  --color-marca-300: #a3b3e3;
+  --color-marca-500: #3a5bc4;
+  --color-marca-600: #2747a8;
+  --color-marca-700: #1e3784;
+  --color-marca-900: #16233b;
+
+  /* "Libre": verde azulado propio (reemplaza la escala emerald en toda la app) */
+  --color-emerald-50: #e8f6f3;
+  --color-emerald-100: #cdeee7;
+  --color-emerald-300: #8fd3c4;
+  --color-emerald-500: #179e89;
+  --color-emerald-600: #0f8a78;
+  --color-emerald-700: #0b6f61;
+  --color-emerald-800: #0a594e;
+}
+
+/* =====================================================================
+   MODO OSCURO: se redefinen las variables de color; todas las pantallas
+   lo heredan sin tocar sus plantillas.
+   ===================================================================== */
+:root.oscuro {
+  color-scheme: dark;
+  --color-fondo: #0b111c;
+  --color-superficie: #121a29;
+
+  --color-slate-50: #172033;
+  --color-slate-100: #1c2639;
+  --color-slate-200: #27324a;
+  --color-slate-300: #36435e;
+  --color-slate-400: #66738d;
+  --color-slate-500: #8a96ac;
+  --color-slate-600: #a7b1c4;
+  --color-slate-700: #c5ccda;
+  --color-slate-800: #dee3ec;
+  --color-slate-900: #eef1f6;
+
+  --color-marca-50: #1a2547;
+  --color-marca-100: #22305c;
+  --color-marca-300: #3d5294;
+  --color-marca-500: #6683e6;
+  --color-marca-600: #4d6be0;
+  --color-marca-700: #b1c2f7;
+
+  --color-emerald-50: #0d2a26;
+  --color-emerald-100: #113a32;
+  --color-emerald-300: #1f6b5c;
+  --color-emerald-500: #2bb59d;
+  --color-emerald-600: #23a38c;
+  --color-emerald-700: #74dac6;
+  --color-emerald-800: #95e5d5;
+
+  --color-red-50: #2a1416;
+  --color-red-100: #3a1a1d;
+  --color-red-200: #5a2428;
+  --color-red-300: #7a2e33;
+  --color-red-700: #f3a3a3;
+  --color-red-800: #f6b7b7;
+  --color-red-900: #f9cccc;
+
+  --color-amber-50: #2a2010;
+  --color-amber-100: #3a2c12;
+  --color-amber-300: #7a5a1c;
+  --color-amber-700: #f2c46b;
+  --color-amber-800: #f5d08a;
+  --color-amber-900: #f8dca8;
+
+  --color-purple-50: #24173a;
+  --color-purple-100: #2f1d4d;
+  --color-purple-300: #5b3d8f;
+  --color-purple-700: #cdaaf8;
+  --color-purple-800: #d9bffa;
+
+  --color-orange-50: #2b1a10;
+  --color-orange-100: #3a2212;
+  --color-orange-700: #f7b47f;
+
+  --color-sky-50: #0f2230;
+  --color-sky-200: #1d4258;
+  --color-sky-900: #cbe7f7;
+}
+
+@layer base {
+  html, body { height: 100%; }
+  body { @apply bg-fondo text-slate-800 antialiased; font-feature-settings: 'tnum' 1; }
+  :focus-visible { outline: 2px solid var(--color-marca-500); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  [hidden] { display: none !important; }
+}
+
+@layer components {
+  /* Botones (base común + variantes) */
+  .btn-primario, .btn-secundario, .btn-peligro, .btn-fantasma {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3.5 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primario { @apply bg-marca-600 text-white hover:bg-marca-700; }
+  .btn-secundario { @apply border border-slate-300 bg-superficie text-slate-700 hover:bg-slate-100; }
+  .btn-peligro { @apply bg-red-600 text-white hover:bg-red-700; }
+  .btn-fantasma { @apply text-slate-600 hover:bg-slate-100; }
+  .btn-sm { @apply px-2.5 py-1 text-xs; }
+
+  /* Formularios */
+  .etiqueta { @apply mb-1 block text-[13px] font-medium text-slate-600; }
+  .campo { @apply w-full rounded-md border border-slate-300 bg-superficie px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-marca-500 focus:ring-2 focus:ring-marca-100 disabled:bg-slate-100; }
+
+  /* Tarjetas */
+  .tarjeta { @apply rounded-lg border border-slate-200 bg-superficie; }
+
+  /* Chips */
+  .chip { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium; }
+
+  /* Tablas */
+  .tabla { @apply w-full text-left text-sm; }
+  .tabla th { @apply border-b border-slate-200 bg-slate-50 px-3 py-2 text-[13px] font-medium text-slate-500; }
+  .tabla td { @apply border-b border-slate-100 px-3 py-2 align-top; }
+  .tabla tbody tr:hover { @apply bg-slate-50; }
+}
+
