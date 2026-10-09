@@ -128,7 +128,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
     <header class="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold">Desempeño</h1>
-        <p class="mt-0.5 text-sm text-slate-600">Tickets, auxiliares, cierres de turno, PCs y uso de laboratorios del mes. Pasa el mouse por los gráficos para ver el detalle.</p>
+        <p class="mt-0.5 text-sm text-slate-600">Tickets, auxiliares, cierres de turno, PCs y uso de laboratorios del mes. Pasa el mouse (o toca, en el celular) por los gráficos para ver el detalle.</p>
       </div>
       <div class="flex flex-wrap items-end gap-2">
         <div>
@@ -189,7 +189,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
         <app-grafico-lineas [etiquetas]="diasMes()" [titulos]="titulosMes()" [series]="seriesTicketsDia()" [alto]="220" />
       </section>
 
-      <div class="mb-5 grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+      <div class="mb-5 grid gap-5 xl:grid-cols-[1.4fr_1fr] [&>*]:min-w-0">
         <!-- RANKING DE AUXILIARES -->
         <section class="tarjeta p-4">
           <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -253,7 +253,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
       </div>
 
       @if (detalle(); as x) {
-        <div class="mb-5 grid gap-5 lg:grid-cols-2">
+        <div class="mb-5 grid gap-5 lg:grid-cols-2 [&>*]:min-w-0">
           <section class="tarjeta p-4">
             <h2 class="font-semibold">Tickets por turno</h2>
             <p class="mb-3 text-xs text-slate-500">Según la hora en que se registraron y el horario de cada turno</p>
@@ -269,7 +269,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
         <section class="tarjeta mb-5 p-4">
           <h2 class="font-semibold">Tiempo para resolver, por tipo de ticket</h2>
           <p class="mb-3 text-xs text-slate-500">Promedio en horas, solo tickets que se resolvieron después de registrarlos</p>
-          <div class="grid gap-x-8 gap-y-2.5 md:grid-cols-2">
+          <div class="grid gap-x-8 gap-y-2.5 md:grid-cols-2 [&>*]:min-w-0">
             @for (r of x.resolucion_por_tipo; track r.tipo) {
               <div class="cursor-default" (mousemove)="verTip($event, tipos[r.tipo], [{ color: colorSerie1, texto: 'Promedio', valor: r.horas + ' h' }, { texto: 'Tickets', valor: r.tickets }])" (mouseleave)="tip.set(null)">
                 <div class="mb-0.5 flex justify-between text-sm"><span>{{ tipos[r.tipo] }}</span><span class="font-semibold tabular-nums">{{ r.horas | number: '1.0-1' }} h</span></div>
@@ -414,7 +414,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
           </div>
         </div>
 
-        <div class="mb-5 grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+        <div class="mb-5 grid gap-5 xl:grid-cols-[1.4fr_1fr] [&>*]:min-w-0">
           <section class="tarjeta p-4">
             <h3 class="font-semibold">Cierres por día</h3>
             <p class="mb-3 text-xs text-slate-500">A tiempo y con retraso ("sin horario": cierres de antes de registrar los horarios de turno)</p>
@@ -530,7 +530,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
             </div>
           </div>
 
-          <div class="mb-5 grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+          <div class="mb-5 grid gap-5 xl:grid-cols-[1.4fr_1fr] [&>*]:min-w-0">
             <section class="tarjeta p-4">
               <h3 class="font-semibold">Fallas más repetidas</h3>
               <p class="mb-2 text-xs text-slate-500">Veces que se marcó cada falla en una ficha</p>
@@ -574,7 +574,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
             </section>
           </div>
 
-          <div class="mb-5 grid gap-5 xl:grid-cols-2">
+          <div class="mb-5 grid gap-5 xl:grid-cols-2 [&>*]:min-w-0">
             <section>
               <h3 class="mb-2 font-semibold">PCs reincidentes</h3>
               <div class="tarjeta overflow-x-auto">
@@ -690,7 +690,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
           <p class="mb-3 text-xs text-slate-500">Horas de laboratorio ocupadas cada día, por clases, cedidas y eventos</p>
           <app-grafico-lineas [etiquetas]="diasMes()" [titulos]="titulosMes()" [series]="seriesUso(x.uso_por_dia)" unidad=" h" [alto]="230" />
         </section>
-        <div class="mb-5 grid gap-5 lg:grid-cols-2">
+        <div class="mb-5 grid gap-5 lg:grid-cols-2 [&>*]:min-w-0">
           <section class="tarjeta p-4">
             <h3 class="font-semibold">Uso por día de la semana</h3>
             <p class="mb-3 text-xs text-slate-500">Horas en todo el mes</p>
@@ -704,7 +704,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
         </div>
       }
 
-      <div class="mb-5 grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+      <div class="mb-5 grid gap-5 xl:grid-cols-[1.4fr_1fr] [&>*]:min-w-0">
         <!-- MATERIAS -->
         <section class="tarjeta p-4">
           <h3 class="font-semibold">Materias que más ocupan los laboratorios</h3>
@@ -753,7 +753,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
       </div>
 
       @if (detalle(); as x) {
-        <div class="mb-5 grid gap-5 lg:grid-cols-2">
+        <div class="mb-5 grid gap-5 lg:grid-cols-2 [&>*]:min-w-0">
           <!-- CARRERAS -->
           <section class="tarjeta p-4">
             <h3 class="font-semibold">Carreras que más usan los laboratorios</h3>
@@ -840,7 +840,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
         </div>
       </section>
 
-      <div class="mb-5 grid gap-5 xl:grid-cols-[1fr_1.4fr]">
+      <div class="mb-5 grid gap-5 xl:grid-cols-[1fr_1.4fr] [&>*]:min-w-0">
         <!-- ACTIVIDADES DE AUXILIARES POR LAB -->
         <section class="tarjeta p-4">
           <h3 class="font-semibold">Qué hacen los auxiliares en cada laboratorio</h3>

@@ -80,12 +80,13 @@ export function esPcDocente(pc: AmbientePc): boolean {
         </p>
       } @else {
         <!-- PLANO -->
-        <div class="plano overflow-x-auto rounded-xl border-2 border-slate-300 bg-slate-50 p-3">
-          <div class="flex min-w-[560px] gap-4">
+        <!-- En el celular el plano se compacta (solo el número de cada PC) para que entren todas las mesas -->
+        <div class="plano overflow-x-auto rounded-xl border-2 border-slate-300 bg-slate-50 p-1.5 sm:p-3">
+          <div class="flex gap-1.5 sm:min-w-[560px] sm:gap-4">
             <!-- Zona del docente -->
-            <div class="flex w-28 shrink-0 flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-superficie/70 p-2">
-              <span class="w-full rounded bg-slate-700 py-1 text-center text-[10px] font-semibold tracking-wide text-superficie">PIZARRA</span>
-              <span class="text-[10px] font-semibold uppercase text-slate-400">Docente</span>
+            <div class="flex w-12 shrink-0 flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-superficie/70 p-1 sm:w-28 sm:p-2">
+              <span class="w-full rounded bg-slate-700 py-1 text-center text-[8px] font-semibold tracking-wide text-superficie sm:text-[10px]">PIZARRA</span>
+              <span class="hidden text-[10px] font-semibold uppercase text-slate-400 sm:inline">Docente</span>
               @if (docente(); as pc) {
                 <ng-container *ngTemplateOutlet="monitor; context: { $implicit: pc, docente: true }" />
               } @else {
@@ -95,11 +96,11 @@ export function esPcDocente(pc: AmbientePc): boolean {
             </div>
 
             <!-- Mesas de alumnos -->
-            <div class="flex-1 space-y-6">
+            <div class="min-w-0 flex-1 space-y-3 sm:space-y-6">
               @for (fila of filas(); track $index) {
-                <div class="grid gap-3" [style.grid-template-columns]="'repeat(' + mesasPorFila + ', minmax(0, 1fr))'">
+                <div class="grid gap-1.5 sm:gap-3" [style.grid-template-columns]="'repeat(' + mesasPorFila + ', minmax(0, 1fr))'">
                   @for (mesa of fila; track $index) {
-                    <div class="flex flex-col gap-1.5 rounded-md border-2 border-slate-300 bg-superficie p-1.5 shadow-sm">
+                    <div class="flex flex-col gap-1 rounded-md border-2 border-slate-300 bg-superficie p-0.5 shadow-sm sm:gap-1.5 sm:p-1.5">
                       @for (pc of mesa; track pc.id) {
                         <ng-container *ngTemplateOutlet="monitor; context: { $implicit: pc, docente: false }" />
                       }
@@ -198,20 +199,20 @@ export function esPcDocente(pc: AmbientePc): boolean {
     <!-- Una PC dibujada como monitor -->
     <ng-template #monitor let-pc let-docente="docente">
       <button type="button"
-              class="group relative flex w-full items-center gap-1.5 rounded-md border px-1.5 py-1 text-left transition"
+              class="group relative flex w-full flex-col items-center gap-0.5 rounded-md border px-0.5 py-1 text-left transition sm:flex-row sm:gap-1.5 sm:px-1.5"
               [class]="marcada(pc) ? 'border-marca-500 bg-marca-50 ring-2 ring-marca-500' : 'border-transparent hover:border-slate-300 hover:bg-slate-100'"
               [class.cursor-default]="false"
               [class.opacity-50]="modo() === 'seleccion' && !seleccionable(pc) && !marcada(pc)"
               [class.cursor-not-allowed]="modo() === 'seleccion' && pc.estado === 'baja'"
               (click)="tocar(pc)" [title]="pc.etiqueta + ' · ' + info(pc).texto">
         <!-- pantalla -->
-        <span class="relative flex h-7 w-9 shrink-0 items-center justify-center rounded-[3px] border-2 text-white" [class]="info(pc).pantalla">
+        <span class="relative flex h-6 w-8 shrink-0 items-center justify-center rounded-[3px] border-2 text-white sm:h-7 sm:w-9" [class]="info(pc).pantalla">
           @if (info(pc).icono; as ic) { <app-icono [nombre]="ic" [tamano]="13" [grosor]="2.5" /> }
           <span class="absolute -bottom-[5px] left-1/2 h-[3px] w-3 -translate-x-1/2 rounded-sm bg-slate-400"></span>
         </span>
-        <span class="min-w-0 leading-tight">
-          <span class="block text-sm font-bold text-slate-800">{{ docente ? 'DOC' : numero(pc) }}</span>
-          <span class="block truncate text-[9px] text-slate-500">{{ pc.etiqueta }}</span>
+        <span class="min-w-0 pt-0.5 text-center leading-tight sm:pt-0 sm:text-left">
+          <span class="block text-xs font-bold text-slate-800 sm:text-sm">{{ docente ? 'DOC' : numero(pc) }}</span>
+          <span class="hidden truncate text-[9px] text-slate-500 sm:block">{{ pc.etiqueta }}</span>
         </span>
         @if (marcada(pc)) {
           <span class="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-marca-600 text-white">

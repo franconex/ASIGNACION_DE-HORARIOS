@@ -59,9 +59,10 @@ const ESTADOS: { valor: EstadoPc; texto: string; clase: string; punto: string }[
               <!-- Fallas -->
               <div>
                 <p class="etiqueta">Falla(s) * <span class="font-normal text-slate-400">(puedes elegir varias)</span></p>
+                @if (!categoriasConFallas().length) { <p class="mb-1.5 text-xs text-slate-400">Cargando lista de fallas…</p> }
                 @for (c of categoriasConFallas(); track c.valor) {
                   <div class="mb-1.5 flex flex-wrap items-center gap-1">
-                    <span class="w-20 shrink-0 text-[11px] text-slate-400">{{ c.texto }}</span>
+                    <span class="w-full shrink-0 text-[11px] text-slate-400 sm:w-20">{{ c.texto }}</span>
                     @for (falla of c.fallas; track falla.id) {
                       <button type="button" class="rounded-full border px-2.5 py-0.5 text-xs transition"
                               [class]="f.fallas.includes(falla.id) ? 'border-marca-500 bg-marca-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-100'"
@@ -74,14 +75,14 @@ const ESTADOS: { valor: EstadoPc; texto: string; clase: string; punto: string }[
                           [class]="f.otra ? 'border-marca-500 bg-marca-600 text-white' : 'border-dashed border-slate-400 text-slate-600 hover:bg-slate-100'"
                           [attr.aria-pressed]="f.otra" (click)="f.otra = !f.otra">+ Otra…</button>
                   @if (f.otra) {
-                    <input class="campo !w-72 !py-1 text-sm" maxlength="120" [(ngModel)]="f.falla_otra" placeholder="Ej: cable HDMI suelto" aria-label="Otra falla">
+                    <input class="campo !w-72 !py-1 text-sm" maxlength="120" [ngModelOptions]="{ standalone: true }" [(ngModel)]="f.falla_otra" placeholder="Ej: cable HDMI suelto" aria-label="Otra falla">
                   }
                 </div>
               </div>
 
               <div>
                 <label class="etiqueta" [attr.for]="'diag-' + x.pc.id">Diagnóstico <span class="font-normal text-slate-400">(qué se encontró)</span></label>
-                <input [id]="'diag-' + x.pc.id" class="campo" maxlength="300" [(ngModel)]="f.diagnostico" placeholder="Ej: la fuente no entrega voltaje">
+                <input [id]="'diag-' + x.pc.id" class="campo" maxlength="300" [ngModelOptions]="{ standalone: true }" [(ngModel)]="f.diagnostico" placeholder="Ej: la fuente no entrega voltaje">
               </div>
 
               <!-- Estado final -->
@@ -100,21 +101,21 @@ const ESTADOS: { valor: EstadoPc; texto: string; clase: string; punto: string }[
 
               <div>
                 <label class="etiqueta" [attr.for]="'corr-' + x.pc.id">{{ etiquetaCorreccion(f) }}</label>
-                <textarea [id]="'corr-' + x.pc.id" class="campo" rows="2" maxlength="1000" [(ngModel)]="f.correccion" [placeholder]="ejemploCorreccion(f)"></textarea>
+                <textarea [id]="'corr-' + x.pc.id" class="campo" rows="2" maxlength="1000" [ngModelOptions]="{ standalone: true }" [(ngModel)]="f.correccion" [placeholder]="ejemploCorreccion(f)"></textarea>
               </div>
 
               <!-- Pieza (opcional) -->
               <div class="flex flex-wrap items-end gap-2">
                 <div>
                   <label class="etiqueta" [attr.for]="'pieza-' + x.pc.id">Pieza cambiada <span class="font-normal text-slate-400">(opcional)</span></label>
-                  <select [id]="'pieza-' + x.pc.id" class="campo !w-48" [ngModel]="f.piezaOtra ? '__otra' : f.pieza" (ngModelChange)="elegirPieza(f, $event)">
+                  <select [id]="'pieza-' + x.pc.id" class="campo !w-48" [ngModelOptions]="{ standalone: true }" [ngModel]="f.piezaOtra ? '__otra' : f.pieza" (ngModelChange)="elegirPieza(f, $event)">
                     <option value="">Ninguna</option>
                     @for (p of piezas; track p) { <option [value]="p">{{ p }}</option> }
                     <option value="__otra">Otra…</option>
                   </select>
                 </div>
                 @if (f.piezaOtra) {
-                  <input class="campo !w-56" maxlength="60" [(ngModel)]="f.pieza" placeholder="¿Qué pieza?" aria-label="Otra pieza">
+                  <input class="campo !w-56" maxlength="60" [ngModelOptions]="{ standalone: true }" [(ngModel)]="f.pieza" placeholder="¿Qué pieza?" aria-label="Otra pieza">
                 }
               </div>
 
@@ -123,7 +124,7 @@ const ESTADOS: { valor: EstadoPc; texto: string; clase: string; punto: string }[
               }
               @if (pcs().length > 1) {
                 <button type="button" class="btn-secundario btn-sm" (click)="copiarATodas(x.pc.id)">
-                  <app-icono nombre="copiar" [tamano]="14" /> Copiar esta ficha a las otras {{ pcs().length - 1 }} PCs
+                  <app-icono nombre="copiar" [tamano]="14" /> Copiar esta ficha {{ pcs().length === 2 ? 'a la otra PC' : 'a las otras ' + (pcs().length - 1) + ' PCs' }}
                 </button>
               }
             </div>
@@ -249,7 +250,8 @@ export class FichasReparacionComponent implements OnInit {
       if (pc.id !== origenId) nuevo.set(pc.id, { ...o, pc_id: pc.id, fallas: [...o.fallas] });
     }
     this.porPc.set(nuevo);
-    this.notificaciones.exito(`Ficha copiada a ${this.pcs().length - 1} PCs. Revisa la que sea distinta.`);
+    const otras = this.pcs().length - 1;
+    this.notificaciones.exito(`Ficha copiada a ${otras === 1 ? 'la otra PC' : otras + ' PCs'}. Revisa la que sea distinta.`);
   }
 
   protected estado(e: EstadoPc) {

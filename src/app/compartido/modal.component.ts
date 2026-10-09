@@ -3,22 +3,24 @@ import { IconoComponent } from './icono.component';
 
 /**
  * Ventana modal reutilizable. El contenido se proyecta con <ng-content>,
- * y los botones del pie con el atributo [pie].
+ * y los botones del pie con el atributo [pie]. En el celular ocupa toda la
+ * pantalla, con el título fijo arriba y los botones fijos abajo.
  */
 @Component({
   selector: 'app-modal',
   imports: [IconoComponent],
   template: `
     @if (abierto()) {
-      <div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-[2px]"
+      <div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 backdrop-blur-[2px] sm:p-4"
            (mousedown)="alPulsarFondo($event)">
-        <div class="tarjeta my-8 w-full shadow-xl" [class]="anchos[ancho()]" (mousedown)="$event.stopPropagation()">
-          <div class="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-            <h2 class="text-base font-semibold text-slate-800">{{ titulo() }}</h2>
+        <div class="tarjeta flex min-h-full w-full flex-col rounded-none border-0 shadow-xl sm:my-8 sm:min-h-0 sm:rounded-lg sm:border"
+             [class]="anchos[ancho()]" (mousedown)="$event.stopPropagation()" role="dialog" aria-modal="true" [attr.aria-label]="titulo()">
+          <div class="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-slate-200 bg-superficie px-4 py-3 sm:static sm:rounded-t-lg sm:px-5">
+            <h2 class="min-w-0 truncate text-base font-semibold text-slate-800">{{ titulo() }}</h2>
             <button class="btn-fantasma btn-sm" (click)="cerrar.emit()" aria-label="Cerrar"><app-icono nombre="cerrar" [tamano]="18" /></button>
           </div>
-          <div class="px-5 py-4"><ng-content /></div>
-          <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-3 rounded-b-xl empty:hidden">
+          <div class="flex-1 px-4 py-4 sm:px-5"><ng-content /></div>
+          <div class="sticky bottom-0 z-10 flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 empty:hidden sm:static sm:rounded-b-lg sm:px-5">
             <ng-content select="[pie]" />
           </div>
         </div>

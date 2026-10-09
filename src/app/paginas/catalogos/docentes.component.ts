@@ -35,12 +35,12 @@ interface FormDocente {
         <h2 class="text-lg font-semibold">Docentes</h2>
         <p class="text-sm text-slate-500">Un docente puede pertenecer a varias carreras y dictar varias materias.</p>
       </div>
-      <div class="flex gap-2">
-        <select class="campo !w-48" [ngModel]="carreraFiltro()" (ngModelChange)="carreraFiltro.set(+$event)">
+      <div class="flex w-full flex-wrap gap-2 sm:w-auto">
+        <select class="campo w-full sm:!w-48" [ngModel]="carreraFiltro()" (ngModelChange)="carreraFiltro.set(+$event)">
           <option [ngValue]="0">Todas las carreras</option>
           @for (c of catalogos.carreras(); track c.id) { <option [ngValue]="c.id">{{ c.nombre }}</option> }
         </select>
-        <input maxlength="60" class="campo !w-60" placeholder="Buscar…" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
+        <input maxlength="60" class="campo min-w-0 flex-1 sm:!w-60 sm:flex-none" placeholder="Buscar…" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
         @if (auth.puedeEditar()) { <button class="btn-primario" (click)="nuevo()"><app-icono nombre="agregar" [tamano]="16" /> Nuevo docente</button> }
       </div>
     </div>

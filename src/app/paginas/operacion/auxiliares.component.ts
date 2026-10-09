@@ -104,8 +104,38 @@ const NOMBRE_TURNO: Record<string, string> = { M: 'Mañana', MD: 'Mediodía', T:
       <p class="text-xs text-slate-500">Solo se guardan los auxiliares a los que les elegiste un turno.</p>
     </div>
 
-    <!-- LISTADO Y TURNOS -->
-    <div class="tarjeta mb-8 overflow-x-auto">
+    <!-- LISTADO Y TURNOS: tarjetas en el celular -->
+    <div class="mb-8 space-y-2 md:hidden">
+      @for (u of auxiliares(); track u.id) {
+        <article class="tarjeta p-3">
+          <div class="mb-2 flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="truncate font-medium">{{ u.nombre_completo }}</p>
+              <p class="truncate text-xs text-slate-500">{{ u.correo }}</p>
+            </div>
+            <span class="chip shrink-0" [class]="u.activo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'">{{ u.activo ? 'Activo' : 'Inactivo' }}</span>
+          </div>
+          <dl class="mb-2 grid grid-cols-2 gap-2 text-sm">
+            <div><dt class="text-xs text-slate-500">Turno actual</dt><dd>{{ textoTurno(u.id, 'actual') }}</dd></div>
+            <div><dt class="text-xs text-slate-500">Próximo turno</dt><dd>{{ textoTurno(u.id, 'proximo') }}</dd></div>
+          </dl>
+          <div class="flex items-center gap-2">
+            <select class="campo min-w-0 flex-1" [ngModel]="elegidos()[u.id] ?? null" (ngModelChange)="elegir(u.id, $event)" [attr.aria-label]="'Nuevo turno de ' + u.nombre_completo">
+              <option [ngValue]="null">Nuevo turno: sin cambio</option>
+              <option value="M">Mañana</option><option value="MD">Mediodía</option>
+              <option value="T">Tarde</option><option value="N">Noche</option>
+            </select>
+            <button class="chip shrink-0 cursor-pointer py-1.5" [class]="u.sabado_rotativo ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600'"
+                    (click)="alternarSabado(u)">Sábado: {{ u.sabado_rotativo ? 'Sí' : 'No' }}</button>
+          </div>
+        </article>
+      } @empty {
+        <p class="tarjeta py-8 text-center text-sm text-slate-500">No hay auxiliares. El administrador los crea en Configuración → Usuarios.</p>
+      }
+    </div>
+
+    <!-- LISTADO Y TURNOS: tabla en PC -->
+    <div class="tarjeta mb-8 hidden overflow-x-auto md:block">
       <table class="tabla">
         <thead>
           <tr><th>Auxiliar</th><th>Turno actual</th><th>Próximo turno</th><th>Nuevo turno</th><th>Sábado rotativo</th><th>Estado</th></tr>

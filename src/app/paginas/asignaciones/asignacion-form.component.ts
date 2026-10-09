@@ -29,6 +29,20 @@ interface FilaHorario {
   ids: Record<number, number>;
 }
 
+/** A dónde va la clase un día en que su laboratorio está ocupado */
+interface Destino {
+  ambienteId: number | null;
+  aula: string;
+  otraAula: boolean;
+}
+
+/** Día en que el laboratorio del horario ya está ocupado (evento u otra clase) */
+interface DiaOcupado {
+  fecha: string;
+  motivo: string;
+  reservaId: number | null;
+}
+
 let contadorFilas = 0;
 
 /**
@@ -39,6 +53,9 @@ let contadorFilas = 0;
  *    facultad es siempre Medicina y no se usa grupo.
  * 3) Horarios (días de la semana, bloque u hora manual, laboratorio) con
  *    verificación de choques en vivo y sugerencia de laboratorios libres.
+ *    Si el laboratorio está ocupado algunos días (un evento ya planificado u
+ *    otra clase), se guarda igual: esos días se elige a qué laboratorio o
+ *    aula va la clase (reubicación) y el calendario los pinta en ámbar.
  */
 @Component({
   selector: 'app-asignacion-form',
@@ -79,13 +96,20 @@ let contadorFilas = 0;
           @if (sistema(); as s) {
             @if (s.modo_fechas === 'dias') {
               <app-selector-fechas [valor]="fechasMarcadas()" (valorChange)="cambiarFechas($event)"
-                                   [diasPermitidos]="s.dias_permitidos" [feriados]="catalogos.conjuntoFeriados()">
+                                   [diasPermitidos]="s.dias_permitidos" [feriados]="catalogos.conjuntoFeriados()"
+                                   [resaltadas]="fechasOcupadas()" textoResaltada="Ese día el laboratorio está ocupado: la clase va a otro laboratorio o aula">
                 @if (primerDiaFuturo() && s.dias_sugeridos) {
                   <button type="button" class="ml-auto rounded-md bg-marca-50 px-2 py-0.5 font-medium text-marca-700 hover:bg-marca-100" (click)="completarDias(s)">
                     Completar {{ s.dias_sugeridos }} días desde el {{ fechaCorta(primerDiaFuturo()!) }}
                   </button>
                 }
               </app-selector-fechas>
+              @if (fechasOcupadas().size) {
+                <p class="mt-2 flex items-center gap-1.5 text-xs text-amber-800">
+                  <span class="h-3 w-3 rounded-sm bg-amber-500"></span>
+                  {{ fechasOcupadas().size }} día(s) con el laboratorio ocupado: abajo eliges a dónde va la clase esos días.
+                </p>
+              }
               @if (fechasMarcadas().length) {
                 <p class="mt-2 text-xs text-slate-600">
                   <b>{{ fechasMarcadas().length }}</b> día(s) de clase, del <span class="capitalize">{{ fechaLarga(fechasMarcadas()[0]) }}</span>
@@ -170,7 +194,8 @@ let contadorFilas = 0;
 
           <div class="space-y-3">
             @for (f of filas(); track f.clave; let i = $index) {
-              <div class="rounded-xl border p-4" [class]="choquesDeFila(i).length || erroresInternos()[i] ? 'border-red-300 bg-red-50/40' : 'border-slate-200'">
+              <div class="rounded-xl border p-4"
+                   [class]="choquesDocenteDeFila(i).length || erroresInternos()[i] ? 'border-red-300 bg-red-50/40' : ocupadosDeFila(i).length ? 'border-amber-300' : 'border-slate-200'">
                 <div class="flex flex-wrap items-end gap-3">
                   <div>
                     <label class="etiqueta">Días</label>
@@ -231,15 +256,55 @@ let contadorFilas = 0;
                 @if (erroresInternos()[i]) {
                   <p class="mt-2 flex items-center gap-1 text-sm text-red-700"><app-icono nombre="alerta" [tamano]="14" /> {{ erroresInternos()[i] }}</p>
                 }
-                @if (choquesDeFila(i).length) {
-                  <div class="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-800">
-                    <p class="flex items-center gap-1 font-semibold"><app-icono nombre="alerta" [tamano]="14" /> Choques ({{ choquesDeFila(i).length }})</p>
-                    <ul class="mt-1 list-disc space-y-0.5 pl-5 text-xs">
-                      @for (c of choquesDeFila(i).slice(0, 4); track $index) { <li>{{ c.mensaje }}</li> }
-                    </ul>
-                    @if (choquesDeFila(i).length > 4) { <p class="mt-1 text-xs">… y {{ choquesDeFila(i).length - 4 }} más.</p> }
-                    <p class="mt-1 text-xs">Elija un laboratorio libre, cambie el horario o, luego, registre una cesión.</p>
-                  </div>
+                <!-- El docente ya tiene clase a esa hora: eso sí bloquea -->
+                @if (choquesDocenteDeFila(i); as cd) {
+                  @if (cd.length) {
+                    <div class="mt-2 rounded-lg bg-red-50 p-2 text-sm text-red-800">
+                      <p class="flex items-center gap-1 font-semibold"><app-icono nombre="alerta" [tamano]="14" /> El docente ya tiene clase a esa hora ({{ cd.length }})</p>
+                      <ul class="mt-1 list-disc space-y-0.5 pl-5 text-xs">
+                        @for (c of cd.slice(0, 4); track $index) { <li>{{ c.mensaje }}</li> }
+                      </ul>
+                      @if (cd.length > 4) { <p class="mt-1 text-xs">… y {{ cd.length - 4 }} más.</p> }
+                      <p class="mt-1 text-xs">Cambie el horario o los días.</p>
+                    </div>
+                  }
+                }
+                <!-- Laboratorio ocupado algunos días: la clase va a otro lugar esos días -->
+                @if (ocupadosDeFila(i); as ocupados) {
+                  @if (ocupados.length) {
+                    <div class="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+                      <p class="flex items-center gap-1 font-semibold text-amber-900">
+                        <app-icono nombre="alerta" [tamano]="14" /> {{ ocupados.length }} día(s) con el laboratorio ocupado
+                      </p>
+                      <p class="mb-2 text-xs text-amber-800">La clase se guarda igual: esos días va a otro laboratorio o a un aula. Elige a dónde.</p>
+                      <div class="space-y-1.5">
+                        @for (o of ocupados; track o.fecha) {
+                          @let d = destino(f.clave, o.fecha);
+                          <div class="flex flex-wrap items-center gap-2 rounded-md bg-superficie p-2" [class.ring-1]="!destinoValido(d)" [class.ring-amber-400]="!destinoValido(d)">
+                            <div class="min-w-40 flex-1">
+                              <p class="font-medium capitalize">{{ fechaLarga(o.fecha) }}</p>
+                              <p class="text-xs text-slate-500">Ocupado por {{ o.motivo }}</p>
+                            </div>
+                            <select class="campo sm:!w-48" [ngModel]="valorDestino(d)" (ngModelChange)="elegirDestino(f.clave, o.fecha, $event)"
+                                    [attr.aria-label]="'A dónde va la clase el ' + fechaLarga(o.fecha)">
+                              <option value="">¿A dónde va?</option>
+                              @for (a of libresEn(f, o.fecha); track a.id) { <option [value]="'lab:' + a.id">{{ a.codigo }} (libre)</option> }
+                              <option value="aula">Otra aula…</option>
+                            </select>
+                            @if (d?.otraAula) {
+                              <input class="campo sm:!w-44" maxlength="80" placeholder="Ej: Aula 201" [ngModel]="d?.aula ?? ''"
+                                     (ngModelChange)="escribirAula(f.clave, o.fecha, $event)" aria-label="Aula">
+                            }
+                          </div>
+                        }
+                      </div>
+                      @if (ocupados.length > 1) {
+                        <button type="button" class="btn-secundario btn-sm mt-2" (click)="usarEnTodos(i)">
+                          <app-icono nombre="copiar" [tamano]="13" /> Usar el destino del primer día en todos
+                        </button>
+                      }
+                    </div>
+                  }
                 }
               </div>
             }
@@ -298,6 +363,13 @@ export class AsignacionFormComponent implements OnInit {
   protected readonly choques = signal<Choque[]>([]);
   private mapaCandidatos: number[] = [];
   protected readonly libres = signal<Map<number, Ambiente[]>>(new Map());
+  /** Días ocupados: a dónde va la clase (clave: fila|fecha) */
+  protected readonly destinos = signal<Map<string, Destino>>(new Map());
+  /** Laboratorios libres en una fecha y horas (clave: fecha|inicio|fin) */
+  private readonly libresDia = signal<Map<string, Ambiente[]>>(new Map());
+  /** Días marcados en que el laboratorio está ocupado (se pintan en el calendario) */
+  protected readonly fechasOcupadas = computed(() =>
+    new Set(this.choques().filter((c) => c.tipo_choque === 'ambiente').map((c) => c.fecha)));
   protected readonly verificando = signal(false);
   protected readonly guardando = signal(false);
   private temporizador?: ReturnType<typeof setTimeout>;
@@ -385,7 +457,8 @@ export class AsignacionFormComponent implements OnInit {
     if (this.filas().some((f) => !f.dias.length || !f.ambienteId || !f.horaInicio || !f.horaFin)) return 'Cada horario necesita días, horas y laboratorio.';
     if (this.filas().some((f) => !this.fechasDeFila(f).length)) return 'Un horario no tiene ninguna clase en las fechas elegidas.';
     if (Object.keys(this.erroresInternos()).length) return 'Corrija los horarios superpuestos.';
-    if (this.choques().length) return 'Hay choques: elija otro laboratorio u horario.';
+    if (this.choques().some((c) => c.tipo_choque === 'docente')) return 'El docente ya tiene clase a esa hora: cambie el horario.';
+    if (this.faltanDestinos()) return 'Elija a qué laboratorio o aula va la clase en los días ocupados.';
     return '';
   });
   protected readonly puedeGuardar = computed(() => !this.motivoNoGuardar() && !this.verificando());
@@ -441,7 +514,24 @@ export class AsignacionFormComponent implements OnInit {
         bloque: this.bloqueDe(hhmm(g.horaInicio), hhmm(g.horaFin)), ambienteId: g.ambienteId, ids,
       };
     }));
+    await this.cargarReubicaciones(horarios.map((h) => h.id));
     this.programarVerificacion();
+  }
+
+  /** Destinos ya guardados de los días ocupados (al editar) */
+  private async cargarReubicaciones(horarioIds: number[]): Promise<void> {
+    if (!horarioIds.length) return;
+    const { data } = await this.supabase.cliente.from('reubicaciones')
+      .select('asignacion_horario_id, fecha, ambiente_destino_id, aula_destino').in('asignacion_horario_id', horarioIds);
+    const mapa = new Map<string, Destino>();
+    for (const r of (data ?? []) as { asignacion_horario_id: number; fecha: string; ambiente_destino_id: number | null; aula_destino: string | null }[]) {
+      const fila = this.filas().find((f) => Object.values(f.ids).includes(r.asignacion_horario_id));
+      if (!fila || (!r.ambiente_destino_id && !r.aula_destino)) continue;
+      mapa.set(this.claveDestino(fila.clave, r.fecha), {
+        ambienteId: r.ambiente_destino_id, aula: r.aula_destino ?? '', otraAula: !r.ambiente_destino_id,
+      });
+    }
+    this.destinos.set(mapa);
   }
 
   // ------------------------------------------------------------------
@@ -555,6 +645,107 @@ export class AsignacionFormComponent implements OnInit {
     return this.choques().filter((c) => this.mapaCandidatos[c.indice] === indice);
   }
 
+  protected choquesDocenteDeFila(indice: number): Choque[] {
+    return this.choquesDeFila(indice).filter((c) => c.tipo_choque === 'docente');
+  }
+
+  /** Días en que el laboratorio del horario ya está ocupado, con qué lo ocupa */
+  protected ocupadosDeFila(indice: number): DiaOcupado[] {
+    const porFecha = new Map<string, Choque[]>();
+    for (const c of this.choquesDeFila(indice)) {
+      if (c.tipo_choque !== 'ambiente') continue;
+      porFecha.set(c.fecha, [...(porFecha.get(c.fecha) ?? []), c]);
+    }
+    return [...porFecha].sort(([a], [b]) => a.localeCompare(b)).map(([fecha, lista]) => ({
+      fecha,
+      motivo: [...new Set(lista.map((c) => c.titulo + (c.origen === 'reserva' ? ' (evento)' : '')))].join(', '),
+      reservaId: lista.find((c) => c.origen === 'reserva')?.reserva_id ?? null,
+    }));
+  }
+
+  private claveDestino(fila: number, fecha: string): string {
+    return `${fila}|${fecha}`;
+  }
+
+  protected destino(fila: number, fecha: string): Destino | undefined {
+    return this.destinos().get(this.claveDestino(fila, fecha));
+  }
+
+  protected destinoValido(d: Destino | undefined): boolean {
+    return !!d && (d.otraAula ? d.aula.trim().length >= 2 : !!d.ambienteId);
+  }
+
+  /** ¿Falta elegir a dónde va la clase algún día ocupado? */
+  private faltanDestinos(): boolean {
+    return this.filas().some((f, i) => this.ocupadosDeFila(i).some((o) => !this.destinoValido(this.destino(f.clave, o.fecha))));
+  }
+
+  protected valorDestino(d: Destino | undefined): string {
+    if (!d) return '';
+    return d.otraAula ? 'aula' : d.ambienteId ? `lab:${d.ambienteId}` : '';
+  }
+
+  protected elegirDestino(fila: number, fecha: string, valor: string): void {
+    const actual = this.destino(fila, fecha);
+    const nuevo: Destino = valor === 'aula'
+      ? { ambienteId: null, aula: actual?.aula ?? '', otraAula: true }
+      : { ambienteId: valor.startsWith('lab:') ? Number(valor.slice(4)) : null, aula: '', otraAula: false };
+    this.destinos.update((m) => new Map(m).set(this.claveDestino(fila, fecha), nuevo));
+  }
+
+  protected escribirAula(fila: number, fecha: string, aula: string): void {
+    this.destinos.update((m) => new Map(m).set(this.claveDestino(fila, fecha), { ambienteId: null, aula, otraAula: true }));
+  }
+
+  /** Copia el destino del primer día ocupado a los demás (si ese laboratorio también está libre esos días) */
+  protected usarEnTodos(indice: number): void {
+    const f = this.filas()[indice];
+    const ocupados = this.ocupadosDeFila(indice);
+    const primero = this.destino(f.clave, ocupados[0]?.fecha ?? '');
+    if (!this.destinoValido(primero)) {
+      this.notificaciones.aviso('Primero elige a dónde va la clase el primer día.');
+      return;
+    }
+    let omitidos = 0;
+    const mapa = new Map(this.destinos());
+    for (const o of ocupados.slice(1)) {
+      if (!primero!.otraAula && !this.libresEn(f, o.fecha).some((a) => a.id === primero!.ambienteId)) {
+        omitidos++;
+        continue;
+      }
+      mapa.set(this.claveDestino(f.clave, o.fecha), { ...primero! });
+    }
+    this.destinos.set(mapa);
+    if (omitidos) this.notificaciones.aviso(`${omitidos} día(s) ese laboratorio no está libre: elige otro destino para esos días.`);
+  }
+
+  /** Laboratorios libres en esa fecha y horario (sin el del propio horario) */
+  protected libresEn(f: FilaHorario, fecha: string): Ambiente[] {
+    return (this.libresDia().get(`${fecha}|${f.horaInicio}|${f.horaFin}`) ?? [])
+      .filter((a) => a.id !== f.ambienteId && a.tipo === 'laboratorio');
+  }
+
+  /** Pide los laboratorios libres de cada día ocupado que aún no se consultó */
+  private async cargarLibresDia(version: number): Promise<void> {
+    const ignorar = { asignacion_id: this.id() ?? null };
+    const pendientes = new Map<string, { fecha: string; inicio: string; fin: string }>();
+    this.filas().forEach((f, i) => {
+      for (const o of this.ocupadosDeFila(i)) {
+        const clave = `${o.fecha}|${f.horaInicio}|${f.horaFin}`;
+        if (!this.libresDia().has(clave)) pendientes.set(clave, { fecha: o.fecha, inicio: f.horaInicio, fin: f.horaFin });
+      }
+    });
+    if (!pendientes.size) return;
+    const resultados = await Promise.all([...pendientes].map(async ([clave, p]) =>
+      [clave, await this.ocupacion.ambientesLibres(p.fecha, p.inicio, p.fin, ignorar)] as const));
+    if (version !== this.versionVerificacion) return;
+    this.libresDia.update((m) => {
+      const nuevo = new Map(m);
+      for (const [clave, lista] of resultados) nuevo.set(clave, lista);
+      return nuevo;
+    });
+  }
+
   protected libresDeFila(indice: number): Ambiente[] | null {
     return this.libres().get(this.filas()[indice]?.clave) ?? null;
   }
@@ -596,6 +787,7 @@ export class AsignacionFormComponent implements OnInit {
       if (version !== this.versionVerificacion) return;
       this.choques.set(choques);
       this.libres.set(libresPorFila);
+      await this.cargarLibresDia(version);
     } catch (e) {
       this.notificaciones.error(e, 'No se pudo verificar la disponibilidad');
     } finally {
@@ -625,6 +817,15 @@ export class AsignacionFormComponent implements OnInit {
       const horarios = this.filas().flatMap((f) => f.dias.map((dia) => ({
         id: f.ids[dia] ?? null, dia_semana: dia, hora_inicio: f.horaInicio, hora_fin: f.horaFin, ambiente_id: f.ambienteId,
       })));
+      // Días ocupados: a dónde va la clase (reubicación en la misma operación)
+      const reubicaciones = this.filas().flatMap((f, i) => this.ocupadosDeFila(i).map((o) => {
+        const d = this.destino(f.clave, o.fecha)!;
+        return {
+          dia_semana: diaIso(o.fecha), hora_inicio: f.horaInicio, ambiente_id: f.ambienteId, fecha: o.fecha,
+          ambiente_destino_id: d.otraAula ? null : d.ambienteId, aula_destino: d.otraAula ? d.aula.trim() : null,
+          reserva_id: o.reservaId, motivo: `Laboratorio ocupado: ${o.motivo}`.slice(0, 300),
+        };
+      }));
       await this.ocupacion.guardarAsignacion({
         id: this.id() ?? null,
         sistema_id: this.sistemaId(),
@@ -632,10 +833,12 @@ export class AsignacionFormComponent implements OnInit {
         fecha_inicio: modoDias ? null : this.fechaInicio(),
         fecha_fin: modoDias ? null : this.fechaFin(),
         carrera_id: this.facultadId(), docente_id: this.docenteId(), materia_id: this.materiaId(),
-        grupo: this.usaGrupo() ? this.grupo().trim() : '', observacion: this.observacion().trim(), horarios,
+        grupo: this.usaGrupo() ? this.grupo().trim() : '', observacion: this.observacion().trim(), horarios, reubicaciones,
       });
       await this.vincularDocente();
-      this.notificaciones.exito('Asignación guardada.');
+      this.notificaciones.exito(reubicaciones.length
+        ? `Asignación guardada. ${reubicaciones.length} día(s) la clase va a otro laboratorio o aula.`
+        : 'Asignación guardada.');
       this.paneles.guardado();
     } catch (e) {
       this.notificaciones.error(e, 'No se guardó');

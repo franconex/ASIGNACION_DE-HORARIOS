@@ -108,7 +108,7 @@ function horaLaPaz(): string {
 
           @if (!auth.esAuxiliar()) {
           <label class="etiqueta">¿De qué turno es el reporte?</label>
-          <div class="mb-3 grid grid-cols-4 gap-1 rounded-lg bg-slate-100 p-1">
+          <div class="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 sm:grid-cols-4">
             @for (t of turnos; track t.valor) {
               <button type="button" class="rounded-md py-1.5 text-sm font-medium transition"
                       [class]="turno() === t.valor ? 'bg-superficie text-marca-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'"

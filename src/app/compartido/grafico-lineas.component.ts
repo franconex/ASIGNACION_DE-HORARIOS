@@ -64,7 +64,7 @@ const MARGEN = { arriba: 12, derecha: 84, abajo: 22, izquierda: 34 };
           }
           <!-- zona para el mouse -->
           <rect [attr.x]="m.izquierda" [attr.y]="m.arriba" [attr.width]="anchoUtil()" [attr.height]="altoUtil()"
-                fill="transparent" (mousemove)="mover($event)" />
+                fill="transparent" (mousemove)="mover($event)" (pointerdown)="mover($event)" />
         </svg>
       }
       @if (indice() !== null) {

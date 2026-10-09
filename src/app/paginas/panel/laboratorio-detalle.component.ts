@@ -1,11 +1,12 @@
 import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { IconoComponent } from '../../compartido/icono.component';
+import { ModalComponent } from '../../compartido/modal.component';
 import { OcupacionDetalleComponent } from '../../compartido/ocupacion-detalle.component';
 import { LaboratorioCroquisComponent } from './laboratorio-croquis.component';
 import { LaboratorioEquiposComponent } from './laboratorio-equipos.component';
 import { AuthService } from '../../core/auth.service';
 import { CatalogosService } from '../../core/catalogos.service';
-import { DIAS_CORTOS, diaIso, fechaCorta, hhmm, hoyIso, rangoFechas, seSolapan, sumarDias } from '../../core/fechas';
+import { DIAS_CORTOS, diaIso, fechaCorta, fechaLarga, hhmm, hoyIso, rangoFechas, seSolapan, sumarDias } from '../../core/fechas';
 import { Asignacion, BloqueHorario, Ocupacion } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { OcupacionService } from '../../core/ocupacion.service';
@@ -20,7 +21,7 @@ import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
  */
 @Component({
   selector: 'app-laboratorio-detalle',
-  imports: [IconoComponent, OcupacionDetalleComponent, LaboratorioCroquisComponent, LaboratorioEquiposComponent],
+  imports: [IconoComponent, ModalComponent, OcupacionDetalleComponent, LaboratorioCroquisComponent, LaboratorioEquiposComponent],
   template: `
     <div class="flex h-full flex-col">
       <!-- Encabezado -->
@@ -109,10 +110,10 @@ import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
                             <span class="block truncate text-[10px] text-slate-500">{{ hhmm(o.hora_inicio) }}–{{ hhmm(o.hora_fin) }}</span>
                           </button>
                         } @empty {
-                          @if (auth.puedeEditar()) {
+                          @if (auth.puedeEditar() && d >= hoy) {
                             <button class="block h-8 w-full rounded text-[10px] text-emerald-600 hover:bg-emerald-50"
-                                    (click)="paneles.abrirReserva(null, { ambienteId: ambienteId(), fecha: d, horaInicio: hhmm(b.hora_inicio), horaFin: hhmm(b.hora_fin) })"
-                                    title="Libre: clic para registrar un evento">Libre</button>
+                                    (click)="porRegistrar.set({ fecha: d, bloque: b })"
+                                    title="Libre: clic para asignar una clase o registrar un evento">Libre</button>
                           } @else {
                             <span class="block py-2 text-center text-[10px] text-emerald-600">Libre</span>
                           }
@@ -163,6 +164,20 @@ import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
     </div>
 
     <app-ocupacion-detalle [ocupacion]="seleccionada()" (cerrar)="seleccionada.set(null)" (cambio)="cargar()" />
+
+    <!-- ¿Qué registrar en el espacio libre elegido? -->
+    <app-modal [abierto]="!!porRegistrar()" titulo="Registrar en este horario" ancho="sm" (cerrar)="porRegistrar.set(null)">
+      @if (porRegistrar(); as r) {
+        <p class="mb-4 text-slate-700">
+          <b>{{ catalogos.codigoAmbiente(ambienteId()) }}</b>, <span class="capitalize">{{ fechaLarga(r.fecha) }}</span>,
+          {{ r.bloque.nombre }} de <b class="tabular-nums">{{ hhmm(r.bloque.hora_inicio) }}</b> a <b class="tabular-nums">{{ hhmm(r.bloque.hora_fin) }}</b>.
+        </p>
+        <div class="grid gap-2">
+          <button class="btn-primario justify-start" (click)="registrar('clase')"><app-icono nombre="nuevaClase" [tamano]="16" /> Asignar una clase</button>
+          <button class="btn-secundario justify-start" (click)="registrar('evento')"><app-icono nombre="evento" [tamano]="16" /> Evento o defensa</button>
+        </div>
+      }
+    </app-modal>
   `,
 })
 export class LaboratorioDetalleComponent {
@@ -187,6 +202,9 @@ export class LaboratorioDetalleComponent {
   protected readonly fechaCorta = fechaCorta;
   protected readonly sumarDias = sumarDias;
   protected readonly diaIso = diaIso;
+  protected readonly fechaLarga = fechaLarga;
+  /** Espacio libre elegido: se pregunta si es una clase o un evento */
+  protected readonly porRegistrar = signal<{ fecha: string; bloque: BloqueHorario } | null>(null);
   protected readonly diasCortos = DIAS_CORTOS;
   protected readonly hoy = hoyIso();
 
@@ -271,5 +289,15 @@ export class LaboratorioDetalleComponent {
     const enEsteLab = (a.horarios ?? []).filter((h) => h.ambiente_id === this.ambienteId());
     const horario = enEsteLab.find((h) => h.dia_semana === diaIso(this.fecha())) ?? enEsteLab[0];
     this.paneles.abrirCesion({ asignacionId: a.id, horarioId: horario?.id ?? null, fecha: this.fecha() >= this.hoy ? this.fecha() : null });
+  }
+
+  /** Abre el formulario elegido con el laboratorio, el día y las horas del bloque */
+  protected registrar(que: 'clase' | 'evento'): void {
+    const r = this.porRegistrar();
+    if (!r) return;
+    this.porRegistrar.set(null);
+    const datos = { ambienteId: this.ambienteId(), fecha: r.fecha, horaInicio: hhmm(r.bloque.hora_inicio), horaFin: hhmm(r.bloque.hora_fin) };
+    if (que === 'clase') this.paneles.abrirAsignacion(null, datos);
+    else this.paneles.abrirReserva(null, { ...datos, tipoId: this.catalogos.tiposReserva().find((t) => t.codigo === 'EVENTO')?.id });
   }
 }

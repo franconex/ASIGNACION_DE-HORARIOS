@@ -106,6 +106,10 @@ export class SelectorFechasComponent {
   readonly feriados = input<Set<string>>(new Set());
   /** Si se indica, SOLO estas fechas se pueden marcar (ej. días de clase de un horario) */
   readonly fechasPermitidas = input<Set<string> | null>(null);
+  /** Días marcados que se pintan aparte (ej. el laboratorio está ocupado ese día) */
+  readonly resaltadas = input<Set<string>>(new Set());
+  /** Explicación de los días resaltados (tooltip) */
+  readonly textoResaltada = input('');
 
   protected readonly cortos = DIAS_CORTOS;
   protected readonly nombresDia = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados', 'domingos'];
@@ -190,6 +194,7 @@ export class SelectorFechasComponent {
 
   protected claseCelda(c: CeldaDia): string {
     if (!c.delMes) return 'invisible';
+    if (c.seleccionado && this.resaltadas().has(c.fecha)) return 'bg-amber-500 font-semibold text-white ring-2 ring-amber-300 hover:bg-amber-600';
     if (c.seleccionado && c.habilitado) return 'bg-marca-600 font-semibold text-white hover:bg-marca-700';
     if (c.seleccionado) return 'bg-marca-100 font-medium text-marca-700';
     if (c.habilitado) return 'text-slate-700 hover:bg-marca-50';
@@ -198,6 +203,7 @@ export class SelectorFechasComponent {
 
   protected tituloCelda(c: CeldaDia): string {
     if (c.feriado) return 'Feriado';
+    if (c.seleccionado && this.resaltadas().has(c.fecha)) return this.textoResaltada();
     if (c.seleccionado && !c.habilitado) return 'Fecha pasada (no se puede cambiar)';
     if (!c.habilitado && c.fecha < this.hoy) return 'Fecha pasada';
     return '';

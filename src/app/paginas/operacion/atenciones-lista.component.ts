@@ -136,11 +136,11 @@ interface FormTicket extends Partial<Atencion> {
       @for (g of grupos(); track g.clave) {
         <div class="tarjeta overflow-hidden">
           <div class="flex flex-wrap items-start gap-3 p-3">
-            <div class="w-20 shrink-0 text-xs text-slate-500">
+            <div class="w-11 shrink-0 text-xs text-slate-500 sm:w-20">
               <p class="font-semibold text-slate-700">{{ g.primero.creado_en | date: 'dd/MM' }}</p>
               <p>{{ g.primero.creado_en | date: 'HH:mm' }}</p>
             </div>
-            <div class="min-w-56 flex-1">
+            <div class="min-w-0 flex-1 sm:min-w-56">
               <p class="flex flex-wrap items-center gap-1.5 text-sm">
                 <span class="chip" [class]="colorCategoria[tipos[g.primero.tipo].categoria]">{{ tipos[g.primero.tipo].texto }}</span>
                 <span class="font-semibold">{{ g.primero.ambiente?.codigo || 'Sin lab' }}</span>
@@ -209,7 +209,8 @@ interface FormTicket extends Partial<Atencion> {
                 }
               </p>
             </div>
-            <div class="flex flex-col items-end gap-1.5">
+            <!-- Estado y acciones: franja de abajo en el celular, columna a la derecha en PC -->
+            <div class="flex w-full items-center justify-between gap-1.5 border-t border-slate-100 pt-2 sm:w-auto sm:flex-col sm:items-end sm:justify-start sm:border-0 sm:pt-0">
               <span class="chip" [class]="estados[g.estado].clase">
                 {{ estados[g.estado].texto }}@if (g.tickets.length > 1 && g.estado !== 'resuelto') { · {{ g.resueltos }}/{{ g.tickets.length }} }
               </span>
@@ -467,7 +468,7 @@ interface FormTicket extends Partial<Atencion> {
 
           <!-- 5. Colaboradores -->
           <div class="relative">
-            <label class="etiqueta"><span class="paso">5</span> Colaboradores (quién más ayudó)</label>
+            <label class="etiqueta"><span class="paso">{{ f.tipo === 'correctivo' && !f.id ? 6 : 5 }}</span> Colaboradores (quién más ayudó)</label>
             <button type="button" class="campo flex min-h-10 flex-wrap items-center gap-1.5 text-left" (click)="abrirColaboradores()">
               @for (id of f.colaboradores; track id) {
                 <span class="chip bg-indigo-100 text-indigo-800">
@@ -792,7 +793,13 @@ export class AtencionesListaComponent implements OnInit {
         return d.checklist?.length ? null : 'Marca al menos una tarea del preventivo.';
       case 'correctivo':
         // Nuevo: cada ficha se valida sola; al editar solo hay textos
-        if (!f.id) return this.fichas()?.validar() ?? 'Marca al menos una PC en el croquis.';
+        if (!f.id) {
+          const fichas = this.fichas();
+          if (fichas) return fichas.validar();
+          // Hay PCs marcadas pero la ficha no se mostró: no culpar a la selección
+          return f.pcs.length ? 'No se pudo abrir la ficha de reparación. Recarga la página (Ctrl+F5) e inténtalo de nuevo.'
+            : 'Marca al menos una PC en el croquis.';
+        }
         return (f.descripcion?.trim().length ?? 0) < 3 ? 'Describe la falla.' : null;
       case 'personal':
         if ((d.persona?.trim().length ?? 0) < 3) return 'Escribe el nombre de la persona atendida.';

@@ -42,8 +42,8 @@ export interface ColumnaCrud {
         <h2 class="text-lg font-semibold">{{ titulo() }}</h2>
         @if (descripcion()) { <p class="text-sm text-slate-500">{{ descripcion() }}</p> }
       </div>
-      <div class="flex gap-2">
-        <input maxlength="60" class="campo !w-60" placeholder="Buscar…" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
+      <div class="flex w-full flex-wrap gap-2 sm:w-auto">
+        <input maxlength="60" class="campo min-w-0 flex-1 sm:!w-60 sm:flex-none" placeholder="Buscar…" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
         @if (auth.puedeEditar()) { <button class="btn-primario" (click)="nuevo()"><app-icono nombre="agregar" [tamano]="16" /> Nuevo</button> }
       </div>
     </div>

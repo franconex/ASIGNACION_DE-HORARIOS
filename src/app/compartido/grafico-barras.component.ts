@@ -39,7 +39,7 @@ const HUECO = 2;
             }
             <!-- zona para el mouse: toda la columna, más grande que la barra -->
             <rect [attr.x]="c.xBanda" [attr.y]="m.arriba" [attr.width]="banda()" [attr.height]="altoUtil()" fill="transparent"
-                  (mouseenter)="indice.set(c.i)" />
+                  (mouseenter)="indice.set(c.i)" (pointerdown)="indice.set(c.i)" />
           }
         </svg>
       }
