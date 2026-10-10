@@ -1,6 +1,8 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { normalizar } from '../../compartido/buscador.component';
 import { IconoComponent } from '../../compartido/icono.component';
+import { paginar, PaginadorComponent } from '../../compartido/paginador.component';
 import { DocenteFormComponent, docenteAFormulario, docenteNuevo, FormDocente } from '../../compartido/docente-form.component';
 import { AuthService } from '../../core/auth.service';
 import { CatalogosService } from '../../core/catalogos.service';
@@ -9,12 +11,12 @@ import { NotificacionesService } from '../../core/notificaciones.service';
 import { ConfirmacionService } from '../../core/confirmacion.service';
 
 /**
- * Catálogo de docentes con sus carreras (una o varias)
- * y las materias que puede dictar.
+ * Catálogo de docentes con sus carreras (una o varias) y las materias que
+ * puede dictar. Se filtra por facultad, materia y estado, con paginación.
  */
 @Component({
   selector: 'app-docentes',
-  imports: [FormsModule, DocenteFormComponent, IconoComponent],
+  imports: [FormsModule, DocenteFormComponent, IconoComponent, PaginadorComponent],
   template: `
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -22,11 +24,20 @@ import { ConfirmacionService } from '../../core/confirmacion.service';
         <p class="text-sm text-slate-500">Un docente puede pertenecer a varias carreras y dictar varias materias.</p>
       </div>
       <div class="flex w-full flex-wrap gap-2 sm:w-auto">
-        <select class="campo w-full sm:!w-48" [ngModel]="carreraFiltro()" (ngModelChange)="carreraFiltro.set(+$event)">
-          <option [ngValue]="0">Todas las carreras</option>
+        <select class="campo w-full sm:!w-48" [ngModel]="carreraFiltro()" (ngModelChange)="carreraFiltro.set(+$event)" aria-label="Filtrar por facultad">
+          <option [ngValue]="0">Todas las facultades</option>
           @for (c of catalogos.carreras(); track c.id) { <option [ngValue]="c.id">{{ c.nombre }}</option> }
         </select>
-        <input maxlength="60" class="campo min-w-0 flex-1 sm:!w-60 sm:flex-none" placeholder="Buscar…" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
+        <select class="campo w-full sm:!w-56" [ngModel]="materiaFiltro()" (ngModelChange)="materiaFiltro.set(+$event)" aria-label="Filtrar por materia">
+          <option [ngValue]="0">Todas las materias</option>
+          @for (m of materiasOrdenadas(); track m.id) { <option [ngValue]="m.id">{{ m.nombre }}</option> }
+        </select>
+        <select class="campo w-full sm:!w-32" [ngModel]="estado()" (ngModelChange)="estado.set($event)" aria-label="Filtrar por estado">
+          <option value="">Todos</option>
+          <option value="activos">Activos</option>
+          <option value="inactivos">Inactivos</option>
+        </select>
+        <input maxlength="60" class="campo min-w-0 flex-1 sm:!w-60 sm:flex-none" placeholder="Buscar nombre, carnet, correo…" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
         @if (auth.puedeEditar()) { <button class="btn-primario" (click)="nuevo()"><app-icono nombre="agregar" [tamano]="16" /> Nuevo docente</button> }
       </div>
     </div>
@@ -35,7 +46,7 @@ import { ConfirmacionService } from '../../core/confirmacion.service';
       <table class="tabla">
         <thead><tr><th>Docente</th><th>Carnet</th><th>Contacto</th><th>Facultades</th><th>Materias</th><th></th></tr></thead>
         <tbody>
-          @for (d of filtrados(); track d.id) {
+          @for (d of pagina(); track d.id) {
             <tr [class.opacity-50]="!d.activo">
               <td class="font-medium">{{ d.apellidos }} {{ d.nombres }} @if (!d.activo) { <span class="chip bg-slate-200">inactivo</span> }</td>
               <td>{{ d.carnet }}</td>
@@ -61,7 +72,7 @@ import { ConfirmacionService } from '../../core/confirmacion.service';
         </tbody>
       </table>
     </div>
-    <p class="mt-2 text-xs text-slate-500">{{ filtrados().length }} docente(s)</p>
+    <app-paginador [total]="filtrados().length" [(pagina)]="numeroPagina" [(porPagina)]="porPagina" nombre="docente(s)" />
 
     <app-docente-form [datos]="form()" (cerrar)="form.set(null)" (guardado)="form.set(null)" />
   `,
@@ -74,14 +85,40 @@ export class DocentesComponent {
 
   protected readonly busqueda = signal('');
   protected readonly carreraFiltro = signal(0);
+  protected readonly materiaFiltro = signal(0);
+  /** '' = todos · 'activos' · 'inactivos' */
+  protected readonly estado = signal('');
+  protected readonly numeroPagina = signal(1);
+  protected readonly porPagina = signal(20);
+  protected readonly materiasOrdenadas = computed(() =>
+    [...this.catalogos.materias()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')));
   protected readonly form = signal<FormDocente | null>(null);
 
+  /** Busca en nombre, carnet, correo, teléfono y materias; filtra por facultad, materia y estado */
   protected readonly filtrados = computed(() => {
-    const texto = this.busqueda().trim().toLowerCase();
+    const texto = normalizar(this.busqueda().trim());
+    const carrera = this.carreraFiltro();
+    const materia = this.materiaFiltro();
+    const estado = this.estado();
     return this.catalogos.docentes().filter((d) =>
-      (!this.carreraFiltro() || (d.docente_carreras ?? []).some((c) => c.carrera_id === this.carreraFiltro())) &&
-      (!texto || `${d.apellidos} ${d.nombres} ${d.carnet ?? ''}`.toLowerCase().includes(texto)));
+      (!carrera || (d.docente_carreras ?? []).some((c) => c.carrera_id === carrera)) &&
+      (!materia || (d.docente_materias ?? []).some((m) => m.materia_id === materia)) &&
+      (!estado || d.activo === (estado === 'activos')) &&
+      (!texto || normalizar(`${d.apellidos} ${d.nombres} ${d.nombres} ${d.apellidos} ${d.carnet ?? ''} ${d.correo ?? ''} ${d.telefono ?? ''} ${this.textoMaterias(d)}`)
+        .includes(texto)));
   });
+  protected readonly pagina = computed(() => paginar(this.filtrados(), this.numeroPagina(), this.porPagina()));
+
+  constructor() {
+    // Al buscar o filtrar se vuelve a la primera página
+    effect(() => {
+      this.busqueda();
+      this.carreraFiltro();
+      this.materiaFiltro();
+      this.estado();
+      this.numeroPagina.set(1);
+    });
+  }
 
   protected colorCarrera(id: number): string {
     return this.catalogos.mapaCarreras().get(id)?.color ?? '#64748b';

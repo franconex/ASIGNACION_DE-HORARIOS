@@ -1,11 +1,13 @@
-import { Component, computed, inject, input, output, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../core/auth.service';
 import { CatalogosService, TablaCatalogo } from '../core/catalogos.service';
 import { NotificacionesService } from '../core/notificaciones.service';
 import { ConfirmacionService } from '../core/confirmacion.service';
+import { normalizar } from './buscador.component';
 import { IconoComponent } from './icono.component';
 import { ModalComponent } from './modal.component';
+import { paginar, PaginadorComponent } from './paginador.component';
 
 /** Definición de un campo del formulario */
 export interface CampoCrud {
@@ -32,11 +34,12 @@ export interface ColumnaCrud {
 
 /**
  * Tabla CRUD genérica para catálogos simples (carreras, materias, ambientes, feriados).
- * Lista con búsqueda + modal de alta/edición + eliminación.
+ * Lista con búsqueda, filtros propios de cada catálogo (contenido [filtros]),
+ * paginación + modal de alta/edición + eliminación.
  */
 @Component({
   selector: 'app-crud-tabla',
-  imports: [FormsModule, ModalComponent, IconoComponent],
+  imports: [FormsModule, ModalComponent, IconoComponent, PaginadorComponent],
   template: `
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -44,6 +47,7 @@ export interface ColumnaCrud {
         @if (descripcion()) { <p class="text-sm text-slate-500">{{ descripcion() }}</p> }
       </div>
       <div class="flex w-full flex-wrap gap-2 sm:w-auto">
+        <ng-content select="[filtros]" />
         <input maxlength="60" class="campo min-w-0 flex-1 sm:!w-60 sm:flex-none" placeholder="Buscar…" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
         @if (auth.puedeEditar()) { <button class="btn-primario" (click)="nuevo()"><app-icono nombre="agregar" [tamano]="16" /> Nuevo</button> }
       </div>
@@ -65,7 +69,7 @@ export interface ColumnaCrud {
           </tr>
         </thead>
         <tbody>
-          @for (fila of filtradas(); track fila[clavePrimaria()]) {
+          @for (fila of pagina(); track fila[clavePrimaria()]) {
             <tr>
               @for (c of columnas(); track c.clave) {
                 <td>
@@ -90,7 +94,7 @@ export interface ColumnaCrud {
         </tbody>
       </table>
     </div>
-    <p class="mt-2 text-xs text-slate-500">{{ filtradas().length }} registro(s)</p>
+    <app-paginador [total]="filtradas().length" [(pagina)]="numeroPagina" [(porPagina)]="porPagina" />
 
     <app-modal [abierto]="!!formulario()" [titulo]="editando() ? 'Editar' : 'Nuevo registro'" (cerrar)="formulario.set(null)">
       @if (formulario(); as f) {
@@ -146,6 +150,8 @@ export class CrudTablaComponent {
   readonly editorPropio = input(false);
   readonly pedirNuevo = output<void>();
   readonly pedirEditar = output<Record<string, unknown>>();
+  /** Cambia cuando el catálogo cambia sus filtros: la tabla vuelve a la página 1 */
+  readonly claveFiltros = input('');
 
   protected readonly busqueda = signal('');
   protected readonly formulario = signal<Record<string, unknown> | null>(null);
@@ -157,9 +163,10 @@ export class CrudTablaComponent {
 
   /** Filas que contienen el texto buscado en alguna columna, en el orden elegido */
   protected readonly filtradas = computed(() => {
-    const texto = this.busqueda().trim().toLowerCase();
+    // Sin distinguir mayúsculas ni tildes ("matematica" encuentra "Matemática")
+    const texto = normalizar(this.busqueda().trim());
     const filas = this.filas() as Record<string, unknown>[];
-    const lista = texto ? filas.filter((f) => this.columnas().some((c) => this.texto(f, c).toLowerCase().includes(texto))) : filas;
+    const lista = texto ? filas.filter((f) => this.columnas().some((c) => normalizar(this.texto(f, c)).includes(texto))) : filas;
     const orden = this.orden();
     if (!orden) return lista;
     const signo = orden.asc ? 1 : -1;
@@ -170,6 +177,20 @@ export class CrudTablaComponent {
       return String(x ?? '').localeCompare(String(y ?? ''), 'es', { numeric: true }) * signo;
     });
   });
+
+  protected readonly numeroPagina = signal(1);
+  protected readonly porPagina = signal(20);
+  protected readonly pagina = computed(() => paginar(this.filtradas(), this.numeroPagina(), this.porPagina()));
+
+  constructor() {
+    // Al buscar, filtrar u ordenar se vuelve a la primera página
+    effect(() => {
+      this.busqueda();
+      this.claveFiltros();
+      this.orden();
+      this.numeroPagina.set(1);
+    });
+  }
 
   /** Primer clic: ascendente; segundo: descendente; tercero: sin orden */
   protected ordenarPor(clave: string): void {
