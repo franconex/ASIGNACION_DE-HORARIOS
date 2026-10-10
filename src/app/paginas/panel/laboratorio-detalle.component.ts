@@ -155,6 +155,9 @@ import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
                       <app-icono nombre="ceder" [tamano]="14" /> Ceder
                     </button>
                     <button class="btn-secundario btn-sm" (click)="paneles.abrirAsignacion(a.id)"><app-icono nombre="editar" [tamano]="14" /> Editar</button>
+                    <button class="btn-secundario btn-sm !border-red-300 !text-red-600" (click)="eliminar(a)" title="Eliminar la asignación completa">
+                      <app-icono nombre="eliminar" [tamano]="14" /> Eliminar
+                    </button>
                   </div>
                 }
               </div>
@@ -286,6 +289,18 @@ export class LaboratorioDetalleComponent {
   protected textoFechas(a: Asignacion): string {
     const s = this.catalogos.mapaSistemas().get(a.sistema_id);
     return `${s?.nombre ?? ''} · ${fechaCorta(a.fecha_inicio)}–${fechaCorta(a.fecha_fin)}`;
+  }
+
+  /** Elimina la asignación completa (todos sus días y horarios, con sus cesiones y reubicaciones) */
+  protected async eliminar(a: Asignacion): Promise<void> {
+    if (!confirm(`¿Eliminar la asignación "${a.materia?.nombre ?? ''}" de ${a.docente?.apellidos ?? ''}?\n\nSe borran todos sus días y horarios, con sus cesiones y reubicaciones.`)) return;
+    try {
+      await this.ocupacion.eliminarAsignacion(a.id);
+      this.notificaciones.exito('Asignación eliminada.');
+      this.paneles.notificarCambio();
+    } catch (e) {
+      this.notificaciones.error(e, 'No se eliminó');
+    }
   }
 
   /** Abre la cesión con la asignación y su horario en este laboratorio */
