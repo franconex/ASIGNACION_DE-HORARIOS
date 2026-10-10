@@ -9,6 +9,7 @@ import { CatalogosService } from '../../core/catalogos.service';
 import { DIAS_CORTOS, diaIso, fechaCorta, fechaLarga, hhmm, hoyIso, rangoFechas, seSolapan, sumarDias } from '../../core/fechas';
 import { Asignacion, BloqueHorario, Ocupacion } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { OcupacionService } from '../../core/ocupacion.service';
 import { PanelesService, PestanaLaboratorio } from '../../core/paneles.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
@@ -195,6 +196,7 @@ export class LaboratorioDetalleComponent {
   private readonly ocupacion = inject(OcupacionService);
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   readonly ambienteId = input.required<number>();
   readonly fecha = input.required<string>();
@@ -293,7 +295,8 @@ export class LaboratorioDetalleComponent {
 
   /** Elimina la asignación completa (todos sus días y horarios, con sus cesiones y reubicaciones) */
   protected async eliminar(a: Asignacion): Promise<void> {
-    if (!confirm(`¿Eliminar la asignación "${a.materia?.nombre ?? ''}" de ${a.docente?.apellidos ?? ''}?\n\nSe borran todos sus días y horarios, con sus cesiones y reubicaciones.`)) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar la asignación completa?', mensaje: `Se eliminará "${a.materia?.nombre ?? ''}" de ${a.docente?.apellidos ?? ''}.`,
+      consecuencias: ['Se borran todos sus días y horarios.', 'También se borran sus cesiones y reubicaciones.'], aceptar: 'Sí, eliminar la asignación' }))) return;
     try {
       await this.ocupacion.eliminarAsignacion(a.id);
       this.notificaciones.exito('Asignación eliminada.');

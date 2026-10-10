@@ -5,6 +5,7 @@ import { CatalogosService } from '../core/catalogos.service';
 import { fechaLarga, hhmm } from '../core/fechas';
 import { Ambiente, Ocupacion } from '../core/modelos';
 import { NotificacionesService } from '../core/notificaciones.service';
+import { ConfirmacionService } from '../core/confirmacion.service';
 import { OcupacionService } from '../core/ocupacion.service';
 import { PanelesService } from '../core/paneles.service';
 import { SupabaseService, ErrorSistema } from '../core/supabase.service';
@@ -119,6 +120,7 @@ export class OcupacionDetalleComponent {
   private readonly ocupacionServicio = inject(OcupacionService);
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
   protected readonly paneles = inject(PanelesService);
 
   /** Ocupación a mostrar (null = cerrado) */
@@ -207,7 +209,8 @@ export class OcupacionDetalleComponent {
   protected async quitarReubicacion(): Promise<void> {
     const o = this.ocupacion();
     if (!o?.reubicacion_id) return;
-    if (!confirm('¿Devolver la clase a su ambiente original ese día?')) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Devolver la clase a su ambiente?', mensaje: `Se quita la reubicación de "${o.titulo}" para ese día.`,
+      consecuencias: ['La clase vuelve a su laboratorio original solo ese día.'], aceptar: 'Sí, devolver', peligro: false }))) return;
     const { error } = await this.supabase.cliente.from('reubicaciones').delete().eq('id', o.reubicacion_id);
     if (error) {
       this.notificaciones.error(new ErrorSistema(error));
@@ -237,11 +240,15 @@ export class OcupacionDetalleComponent {
   /** Elimina por completo la asignación, cesión o evento (por si se cargó mal) */
   protected async eliminar(o: Ocupacion): Promise<void> {
     const pregunta = o.origen === 'clase'
-      ? `¿Eliminar la asignación completa de "${o.titulo}"?\n\nSe borran TODOS sus días y horarios (no solo este), con sus cesiones y reubicaciones. Si solo es este día, use "Reubicar / suspender".`
+      ? { titulo: '¿Eliminar la asignación completa?', mensaje: `Se eliminará la clase "${o.titulo}" de todo el período, no solo de este día.`,
+          consecuencias: ['Se borran TODOS sus días y horarios.', 'También se borran sus cesiones y reubicaciones.',
+            'Si el problema es solo de este día, cancele y use "Reubicar / suspender".'], aceptar: 'Sí, eliminar la asignación' }
       : o.origen === 'cesion'
-        ? `¿Eliminar esta cesión con todas sus fechas?\n\nEl docente vuelve a su laboratorio esos días.`
-        : `¿Eliminar el evento "${o.titulo}" con todos sus días?\n\nLas clases que movió vuelven a su laboratorio.`;
-    if (!confirm(pregunta)) return;
+        ? { titulo: '¿Eliminar esta cesión?', mensaje: 'Se eliminará la cesión con todas sus fechas.',
+            consecuencias: ['El docente vuelve a su laboratorio esos días.'], aceptar: 'Sí, eliminar la cesión' }
+        : { titulo: '¿Eliminar este evento?', mensaje: `Se eliminará "${o.titulo}" con todos sus días.`,
+            consecuencias: ['Las clases que este evento movió vuelven a su laboratorio.'], aceptar: 'Sí, eliminar el evento' };
+    if (!(await this.confirmacion.pedir(pregunta))) return;
     this.guardando.set(true);
     try {
       if (o.origen === 'clase' && o.asignacion_id) await this.ocupacionServicio.eliminarAsignacion(o.asignacion_id);

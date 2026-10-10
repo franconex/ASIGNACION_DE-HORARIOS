@@ -7,6 +7,7 @@ import { CatalogosService } from '../../core/catalogos.service';
 import { DIAS_SEMANA, fechaCorta, hhmm, hoyIso } from '../../core/fechas';
 import { Cesion } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
 
 /** Consulta con todas las relaciones necesarias para mostrar una cesión */
@@ -95,6 +96,7 @@ export class CesionesListaComponent {
   protected readonly paneles = inject(PanelesService);
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   protected readonly hhmm = hhmm;
   protected readonly fechaCorta = fechaCorta;
@@ -152,7 +154,8 @@ export class CesionesListaComponent {
 
 
   protected async eliminar(c: Cesion): Promise<void> {
-    if (!confirm('¿Eliminar esta cesión? El docente volverá a su laboratorio en esas fechas.')) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar esta cesión?', mensaje: 'Se eliminará la cesión con sus fechas.',
+      consecuencias: ['El docente vuelve a su laboratorio en esas fechas.'], aceptar: 'Sí, eliminar la cesión' }))) return;
     const { error } = await this.supabase.cliente.from('cesiones').delete().eq('id', c.id);
     if (error) {
       this.notificaciones.error(new ErrorSistema(error));

@@ -6,6 +6,7 @@ import { AuthService } from '../../core/auth.service';
 import { CatalogosService } from '../../core/catalogos.service';
 import { Docente } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 
 /**
  * Catálogo de docentes con sus carreras (una o varias)
@@ -69,6 +70,7 @@ export class DocentesComponent {
   protected readonly auth = inject(AuthService);
   protected readonly catalogos = inject(CatalogosService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   protected readonly busqueda = signal('');
   protected readonly carreraFiltro = signal(0);
@@ -103,7 +105,8 @@ export class DocentesComponent {
   }
 
   protected async eliminar(d: Docente): Promise<void> {
-    if (!confirm(`¿Eliminar a ${d.apellidos} ${d.nombres}? Si tiene asignaciones, desactívelo en lugar de eliminarlo.`)) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar este docente?', mensaje: `Se eliminará a ${d.apellidos} ${d.nombres}.`,
+      consecuencias: ['Si tiene asignaciones, mejor desactívelo en lugar de eliminarlo.'], aceptar: 'Sí, eliminar docente' }))) return;
     try {
       await this.catalogos.eliminar('docentes', d.id);
       this.notificaciones.exito('Docente eliminado.');

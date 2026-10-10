@@ -9,6 +9,7 @@ import { aMinutos, hhmm, horaActual } from '../../core/fechas';
 import { environment } from '../../../environments/environment';
 import { PcBajaCierre, ReporteTurno, RotacionSabado, TareaReporte, TurnoCodigo, TurnoProgramado } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { OperacionService, textoRetraso, turnoDeLaHora, turnoDelDia } from '../../core/operacion.service';
 import { fechaActual } from '../../core/fechas';
 
@@ -317,6 +318,7 @@ export class TurnoComponent implements OnInit, OnDestroy {
   protected readonly op = inject(OperacionService);
   protected readonly catalogos = inject(CatalogosService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   protected readonly turnos = TURNOS;
   protected readonly nombreTurno = NOMBRE_TURNO;
@@ -574,7 +576,8 @@ export class TurnoComponent implements OnInit, OnDestroy {
   }
 
   protected async eliminar(r: ReporteTurno): Promise<void> {
-    if (!confirm('¿Eliminar este reporte y sus tareas?')) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar este reporte de turno?', mensaje: 'Se borra el cierre de turno.',
+      consecuencias: ['También se borran sus tareas pendientes.'], aceptar: 'Sí, eliminar el reporte' }))) return;
     try {
       await this.op.eliminarReporte(r.id);
       await this.cargar();

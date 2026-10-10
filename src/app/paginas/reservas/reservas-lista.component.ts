@@ -7,6 +7,7 @@ import { CatalogosService } from '../../core/catalogos.service';
 import { fechaCorta, hhmm, hoyIso } from '../../core/fechas';
 import { Reserva } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
 import { CATEGORIAS_EVENTO } from './reserva-form.component';
 
@@ -87,6 +88,7 @@ export class ReservasListaComponent {
   protected readonly paneles = inject(PanelesService);
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   protected readonly hhmm = hhmm;
 
@@ -149,7 +151,8 @@ export class ReservasListaComponent {
   }
 
   protected async eliminar(r: Reserva): Promise<void> {
-    if (!confirm(`¿Eliminar "${r.titulo}"? Las clases reubicadas por esta reserva vuelven a su laboratorio.`)) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar este evento?', mensaje: `Se eliminará "${r.titulo}" con todos sus días.`,
+      consecuencias: ['Las clases que este evento movió vuelven a su laboratorio.'], aceptar: 'Sí, eliminar el evento' }))) return;
     const { error } = await this.supabase.cliente.from('reservas').delete().eq('id', r.id);
     if (error) {
       this.notificaciones.error(new ErrorSistema(error));

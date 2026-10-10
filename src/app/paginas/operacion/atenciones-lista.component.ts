@@ -10,6 +10,7 @@ import { CatalogosService } from '../../core/catalogos.service';
 import { descargarCsv } from '../../core/exportar';
 import { AmbientePc, Atencion, EstadoAtencion, NOMBRE_ROL, Perfil, SolicitudBaja, TipoAtencion, TurnoCodigo } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { FiltroOperacion, OperacionService } from '../../core/operacion.service';
 import {
   ACCIONES_PROGRAMA, CATEGORIAS_TICKET, CategoriaTicket, CHECKLIST_PREVENTIVO, COLOR_CATEGORIA, DetallesTicket,
@@ -575,6 +576,7 @@ export class AtencionesListaComponent implements OnInit {
   protected readonly catalogos = inject(CatalogosService);
   private readonly operacion = inject(OperacionService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   protected readonly tipos = TIPOS_TICKET;
   protected readonly categorias = CATEGORIAS_TICKET;
@@ -997,8 +999,11 @@ export class AtencionesListaComponent implements OnInit {
   }
 
   protected async eliminarGrupo(g: Grupo): Promise<void> {
-    const texto = g.tickets.length > 1 ? `¿Eliminar estos ${g.tickets.length} tickets?` : '¿Eliminar este ticket?';
-    if (!confirm(texto)) return;
+    const varios = g.tickets.length > 1;
+    if (!(await this.confirmacion.pedir({ titulo: varios ? `¿Eliminar estos ${g.tickets.length} tickets?` : '¿Eliminar este ticket?',
+      mensaje: varios ? 'Se borra el registro con todas sus PCs.' : 'Se borra el ticket.',
+      consecuencias: ['Dejará de contar en el desempeño de quien lo registró y de sus colaboradores.'],
+      aceptar: varios ? 'Sí, eliminar los tickets' : 'Sí, eliminar el ticket' }))) return;
     try {
       await this.operacion.eliminarAtenciones(g.tickets.map((t) => t.id));
       this.notificaciones.exito('Eliminado.');
@@ -1012,7 +1017,8 @@ export class AtencionesListaComponent implements OnInit {
   protected async resolverBaja(s: SolicitudBaja, aprobar: boolean): Promise<void> {
     let respuesta: string | null = null;
     if (aprobar) {
-      if (!confirm(`¿Dar de baja ${s.pc?.etiqueta}?\nMotivo: ${s.motivo}`)) return;
+      if (!(await this.confirmacion.pedir({ titulo: '¿Dar de baja esta PC?', mensaje: `${s.pc?.etiqueta ?? 'La PC'} pasará a estado De baja.`,
+        consecuencias: [`Motivo: ${s.motivo}`], aceptar: 'Sí, dar de baja' }))) return;
     } else {
       respuesta = prompt(`¿Por qué se rechaza la baja de ${s.pc?.etiqueta}?`)?.trim() || null;
       if (!respuesta) return;

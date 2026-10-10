@@ -7,6 +7,7 @@ import { descargarCsv } from '../../core/exportar';
 import { DIAS_CORTOS, fechaCorta, hhmm, hoyIso } from '../../core/fechas';
 import { Asignacion, AsignacionHorario } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { PanelesService } from '../../core/paneles.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
 
@@ -136,6 +137,7 @@ export class AsignacionesListaComponent {
   protected readonly paneles = inject(PanelesService);
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   protected readonly hhmm = hhmm;
   protected readonly fechaCorta = fechaCorta;
@@ -224,7 +226,8 @@ export class AsignacionesListaComponent {
   }
 
   protected async eliminar(a: Asignacion): Promise<void> {
-    if (!confirm(`¿Eliminar la asignación "${a.materia?.nombre}" de ${a.docente?.apellidos}? También se eliminan sus cesiones y reubicaciones.`)) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar la asignación completa?', mensaje: `Se eliminará "${a.materia?.nombre ?? ''}" de ${a.docente?.apellidos ?? ''}.`,
+      consecuencias: ['Se borran todos sus días y horarios.', 'También se borran sus cesiones y reubicaciones.'], aceptar: 'Sí, eliminar la asignación' }))) return;
     const { error } = await this.supabase.cliente.from('asignaciones').delete().eq('id', a.id);
     if (error) {
       this.notificaciones.error(new ErrorSistema(error));

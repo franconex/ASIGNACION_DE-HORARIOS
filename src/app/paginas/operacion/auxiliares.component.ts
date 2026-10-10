@@ -5,6 +5,7 @@ import { ModalComponent } from '../../compartido/modal.component';
 import { CategoriaFalla, FallaPc, HorarioTurno, NOMBRE_ROL, Perfil, RotacionSabado, TurnoCodigo, TurnoProgramado } from '../../core/modelos';
 import { CATEGORIAS_FALLA } from '../../core/tickets';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { OperacionService, turnosDeHoy } from '../../core/operacion.service';
 import { environment } from '../../../environments/environment';
 import { aMinutos, fechaActual, fechaCorta, fechaLarga, hhmm } from '../../core/fechas';
@@ -268,6 +269,7 @@ const NOMBRE_TURNO: Record<string, string> = { M: 'Mañana', MD: 'Mediodía', T:
 export class AuxiliaresComponent implements OnInit {
   private readonly op = inject(OperacionService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   protected readonly nombreTurno = NOMBRE_TURNO;
   protected readonly nombreRol = NOMBRE_ROL;
@@ -426,13 +428,15 @@ export class AuxiliaresComponent implements OnInit {
 
   /** Borra toda la asignación de una fecha (por si se guardó mal) */
   protected async eliminarAsignacion(desde: string, turnos: TurnoProgramado[]): Promise<void> {
-    if (!confirm(`¿Eliminar toda la asignación desde el ${fechaLarga(desde)} (${turnos.length} persona(s))?\n\nCada uno vuelve al turno que tenía antes de esa fecha.`)) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar toda la asignación de turnos?', mensaje: `Se borra la asignación desde el ${fechaLarga(desde)} (${turnos.length} persona(s)).`,
+      consecuencias: ['Cada uno vuelve al turno que tenía antes de esa fecha.'], aceptar: 'Sí, eliminar la asignación' }))) return;
     await this.borrarTurnos(turnos.map((t) => t.id), 'Asignación eliminada.');
   }
 
   /** Quita solo a una persona de una asignación */
   protected async eliminarTurno(t: TurnoProgramado): Promise<void> {
-    if (!confirm(`¿Quitar a ${t.perfil?.nombre_completo || 'esta persona'} de la asignación del ${fechaLarga(t.desde)}?\n\nVuelve al turno que tenía antes de esa fecha.`)) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Quitar este turno?', mensaje: `Se quita a ${t.perfil?.nombre_completo || 'esta persona'} de la asignación del ${fechaLarga(t.desde)}.`,
+      consecuencias: ['Vuelve al turno que tenía antes de esa fecha.'], aceptar: 'Sí, quitar' }))) return;
     await this.borrarTurnos([t.id], 'Turno quitado.');
   }
 
@@ -493,7 +497,7 @@ export class AuxiliaresComponent implements OnInit {
   }
 
   protected async eliminarRotacion(r: RotacionSabado): Promise<void> {
-    if (!confirm(`¿Quitar a ${r.auxiliar?.nombre_completo || 'este auxiliar'} del sábado ${fechaCorta(r.fecha)}?`)) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Quitar del sábado?', mensaje: `Se quita a ${r.auxiliar?.nombre_completo || 'este auxiliar'} del sábado ${fechaCorta(r.fecha)}.`, aceptar: 'Sí, quitar' }))) return;
     try {
       await this.op.eliminarRotacion(r.id);
       await this.cargar();

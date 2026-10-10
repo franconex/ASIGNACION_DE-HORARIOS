@@ -6,6 +6,7 @@ import { AuthService } from '../../core/auth.service';
 import { CatalogosService } from '../../core/catalogos.service';
 import { AmbientePc, EstadoPc } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { SupabaseService } from '../../core/supabase.service';
 
 /** Texto y color de cada estado de PC */
@@ -139,6 +140,7 @@ export class LaboratorioEquiposComponent {
   protected readonly auth = inject(AuthService);
   private readonly catalogos = inject(CatalogosService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
   private readonly supabase = inject(SupabaseService);
 
   readonly ambienteId = input.required<number>();
@@ -262,7 +264,8 @@ export class LaboratorioEquiposComponent {
       this.notificaciones.aviso('Solo el administrador o el encargado pueden eliminar una PC. Si ya no sirve, dala de baja desde el croquis.');
       return;
     }
-    if (!confirm(`¿Eliminar ${pc.etiqueta} del inventario?\n\nSe borra para siempre. Si solo ya no funciona, mejor dala de baja (queda el historial).`)) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar esta PC del inventario?', mensaje: `Se borra ${pc.etiqueta} para siempre.`,
+      consecuencias: ['Si solo ya no funciona, mejor dala de baja: así queda el historial.'], aceptar: 'Sí, eliminar la PC' }))) return;
     try {
       await this.catalogos.eliminar('ambiente_pcs', pc.id);
       this.notificaciones.exito('Eliminado.');

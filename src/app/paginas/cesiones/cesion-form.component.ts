@@ -7,6 +7,7 @@ import { CatalogosService } from '../../core/catalogos.service';
 import { DIAS_CORTOS, DIAS_SEMANA, diaIso, fechaCorta, hhmm, hoyIso, rangoFechas } from '../../core/fechas';
 import { Asignacion, AsignacionHorario, CandidatoChoque, Cesion, Choque } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { OcupacionService } from '../../core/ocupacion.service';
 import { PanelesService } from '../../core/paneles.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
@@ -159,6 +160,7 @@ export class CesionFormComponent implements OnInit {
   private readonly ocupacion = inject(OcupacionService);
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   readonly id = input<number | null | undefined>(null);
   readonly asignacionInicial = input<number | null | undefined>(null);
@@ -434,7 +436,8 @@ export class CesionFormComponent implements OnInit {
   /** Elimina por completo lo que se está editando (por si se cargó mal) */
   protected async eliminar(): Promise<void> {
     const id = this.id();
-    if (!id || !confirm('¿Eliminar esta cesión con todas sus fechas?\n\nEl docente vuelve a su laboratorio esos días.')) return;
+    if (!id || !(await this.confirmacion.pedir({ titulo: '¿Eliminar esta cesión?', mensaje: 'Se eliminará la cesión con todas sus fechas y horarios.',
+      consecuencias: ['El docente vuelve a su laboratorio esos días.'], aceptar: 'Sí, eliminar la cesión' }))) return;
     this.guardando.set(true);
     try {
       await this.ocupacion.eliminarCesion(id);

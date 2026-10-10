@@ -7,6 +7,7 @@ import { CatalogosService } from '../../core/catalogos.service';
 import { DIAS_CORTOS, diaIso, fechaCorta, fechaLarga, hhmm, hoyIso, rangoFechas, seSolapan } from '../../core/fechas';
 import { Ambiente, Asignacion, CandidatoChoque, Choque, Reserva } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { OcupacionService } from '../../core/ocupacion.service';
 import { PanelesService, PrellenadoReserva } from '../../core/paneles.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
@@ -260,6 +261,7 @@ export class ReservaFormComponent implements OnInit {
   private readonly ocupacion = inject(OcupacionService);
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
   protected readonly paneles = inject(PanelesService);
 
   /** id a editar (null = nueva) y datos para prellenar */
@@ -629,7 +631,8 @@ export class ReservaFormComponent implements OnInit {
   /** Elimina por completo lo que se está editando (por si se cargó mal) */
   protected async eliminar(): Promise<void> {
     const id = this.id();
-    if (!id || !confirm(`¿Eliminar "${this.titulo() || 'este evento'}" con todos sus días?\n\nLas clases que movió vuelven a su laboratorio.`)) return;
+    if (!id || !(await this.confirmacion.pedir({ titulo: '¿Eliminar este evento?', mensaje: `Se eliminará "${this.titulo() || 'este evento'}" con todos sus días.`,
+      consecuencias: ['Las clases que este evento movió vuelven a su laboratorio.'], aceptar: 'Sí, eliminar el evento' }))) return;
     this.guardando.set(true);
     try {
       await this.ocupacion.eliminarReserva(id);

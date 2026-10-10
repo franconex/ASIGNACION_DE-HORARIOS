@@ -11,6 +11,7 @@ import { fechaActual, horaActual } from '../../core/fechas';
 import { comprimirFoto } from '../../core/fotos';
 import { ObjetoPerdido } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
 
 const BUCKET = 'objetos-perdidos';
@@ -230,6 +231,7 @@ export class ObjetosPerdidosComponent implements OnInit {
   protected readonly catalogos = inject(CatalogosService);
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   protected readonly sugerencias = SUGERENCIAS;
   protected readonly filtros: { valor: 'en_custodia' | 'entregado' | null; texto: string }[] = [
@@ -388,7 +390,8 @@ export class ObjetosPerdidosComponent implements OnInit {
   }
 
   protected async eliminar(o: ObjetoPerdido): Promise<void> {
-    if (!confirm(`¿Eliminar el registro de "${o.nombre}" y sus fotos?`)) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar este objeto perdido?', mensaje: `Se borra el registro de "${o.nombre}".`,
+      consecuencias: ['También se borran sus fotos.'] }))) return;
     try {
       const { error } = await this.supabase.cliente.from('objetos_perdidos').delete().eq('id', o.id);
       if (error) throw new ErrorSistema(error);

@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { AuthService } from '../core/auth.service';
 import { CatalogosService, TablaCatalogo } from '../core/catalogos.service';
 import { NotificacionesService } from '../core/notificaciones.service';
+import { ConfirmacionService } from '../core/confirmacion.service';
 import { IconoComponent } from './icono.component';
 import { ModalComponent } from './modal.component';
 
@@ -131,6 +132,7 @@ export class CrudTablaComponent {
   protected readonly auth = inject(AuthService);
   private readonly catalogos = inject(CatalogosService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   readonly titulo = input.required<string>();
   readonly descripcion = input('');
@@ -222,7 +224,7 @@ export class CrudTablaComponent {
   }
 
   protected async eliminar(fila: Record<string, unknown>): Promise<void> {
-    if (!confirm('¿Eliminar este registro?')) return;
+    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar este registro?', mensaje: 'Se borrará de la lista.' }))) return;
     try {
       await this.catalogos.eliminar(this.tabla(), fila[this.clavePrimaria()], this.clavePrimaria());
       this.notificaciones.exito('Eliminado.');

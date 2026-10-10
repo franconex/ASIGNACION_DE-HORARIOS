@@ -13,6 +13,7 @@ import {
 import { environment } from '../../../environments/environment';
 import { Ambiente, Asignacion, CandidatoChoque, Choque, SistemaAcademico } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { OcupacionService } from '../../core/ocupacion.service';
 import { PanelesService, PrellenadoAsignacion } from '../../core/paneles.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
@@ -353,6 +354,7 @@ export class AsignacionFormComponent implements OnInit {
   private readonly ocupacion = inject(OcupacionService);
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   /** id a editar (null = nueva) y datos para prellenar */
   readonly id = input<number | null | undefined>(null);
@@ -923,7 +925,8 @@ export class AsignacionFormComponent implements OnInit {
   /** Elimina por completo lo que se está editando (por si se cargó mal) */
   protected async eliminar(): Promise<void> {
     const id = this.id();
-    if (!id || !confirm('¿Eliminar esta asignación completa?\n\nSe borran todos sus días y horarios, con sus cesiones y reubicaciones.')) return;
+    if (!id || !(await this.confirmacion.pedir({ titulo: '¿Eliminar la asignación completa?', mensaje: 'Se eliminará esta clase de todo el período.',
+      consecuencias: ['Se borran todos sus días y horarios.', 'También se borran sus cesiones y reubicaciones.'], aceptar: 'Sí, eliminar la asignación' }))) return;
     this.guardando.set(true);
     try {
       await this.ocupacion.eliminarAsignacion(id);
