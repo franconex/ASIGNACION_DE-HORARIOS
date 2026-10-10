@@ -240,6 +240,8 @@ export interface TurnoTrabajo {
 /** Tipos de ticket (ver core/tickets.ts: categorías y formularios) */
 export type TipoAtencion =
   | 'docente' | 'programas' | 'preventivo' | 'correctivo' | 'personal'
+  /** Abrir / cerrar el laboratorio (con todas sus PCs) */
+  | 'apertura_lab' | 'cierre_lab'
   /** Automático: lo deja el sistema al cambiar el estado de una PC */
   | 'cambio_estado';
 export type EstadoAtencion = 'pendiente' | 'en_proceso' | 'resuelto';

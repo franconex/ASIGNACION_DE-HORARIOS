@@ -1115,7 +1115,8 @@ export class DesempenoComponent implements OnInit {
   /** Totales por categoría (docente, técnico, personal, cambios de estado) */
   protected readonly porCategoria = computed(() => {
     const textos: Record<CategoriaTicket, string> = {
-      docente: 'Atención a docente', tecnico: 'Técnico', personal: 'Atención personal', sistema: 'Cambios de estado',
+      docente: 'Atención a docente', tecnico: 'Técnico', personal: 'Atención personal', laboratorio: 'Abrir / cerrar lab',
+      sistema: 'Cambios de estado',
     };
     const totales = new Map<CategoriaTicket, number>();
     for (const t of this.datos()?.por_tipo ?? []) {

@@ -13,7 +13,7 @@ import { NotificacionesService } from '../../core/notificaciones.service';
 import { FiltroOperacion, OperacionService } from '../../core/operacion.service';
 import {
   ACCIONES_PROGRAMA, CATEGORIAS_TICKET, CategoriaTicket, CHECKLIST_PREVENTIVO, COLOR_CATEGORIA, DetallesTicket,
-  PEDIDOS_DOCENTE, RESULTADOS_CORRECTIVO, SUBTIPOS_TECNICO, textoDe, TIPOS_PERSONA, TIPOS_TICKET,
+  PEDIDOS_DOCENTE, RESULTADOS_CORRECTIVO, SUBTIPOS_LABORATORIO, SUBTIPOS_TECNICO, textoDe, TIPOS_PERSONA, TIPOS_TICKET,
 } from '../../core/tickets';
 import { LaboratorioCroquisComponent } from '../panel/laboratorio-croquis.component';
 
@@ -28,7 +28,9 @@ const ESTADOS: Record<EstadoAtencion, { texto: string; clase: string }> = {
   resuelto: { texto: 'Resuelto', clase: 'bg-emerald-100 text-emerald-700' },
 };
 /** Tipos que se hacen sobre PCs: laboratorio y PCs obligatorios */
-const TIPOS_CON_PC: TipoAtencion[] = ['programas', 'preventivo', 'correctivo'];
+const TIPOS_CON_PC: TipoAtencion[] = ['programas', 'preventivo', 'correctivo', 'apertura_lab', 'cierre_lab'];
+/** Abrir / cerrar lab: al elegir el laboratorio se marcan todas sus PCs activas */
+const TIPOS_LAB_COMPLETO: TipoAtencion[] = ['apertura_lab', 'cierre_lab'];
 
 /** Tickets creados juntos (mismo lote) se muestran como una sola fila */
 interface Grupo {
@@ -58,6 +60,7 @@ interface FormTicket extends Partial<Atencion> {
  *     (checklist) y correctivo: una FICHA POR PC (fallas, diagnóstico,
  *     corrección, pieza y cómo queda la PC), que cambia su estado.
  *  3. Atención personal: atención académica a una persona.
+ *  4. Abrir / cerrar lab: se marcan solas todas las PCs activas del lab.
  * Cada PC marcada se guarda como un ticket, unidos por el mismo lote.
  * Arriba, las solicitudes de baja pendientes (las resuelve admin/encargado).
  */
@@ -186,6 +189,12 @@ interface FormTicket extends Partial<Atencion> {
                     <span class="text-xs text-slate-500">{{ datosPersona(g.primero) }}</span></p>
                   <p class="text-sm"><span class="text-slate-500">Motivo:</span> {{ g.primero.descripcion }}</p>
                 }
+                @case ('apertura_lab') {
+                  <p class="mt-0.5 text-sm">Laboratorio abierto · {{ g.tickets.length }} PC(s)</p>
+                }
+                @case ('cierre_lab') {
+                  <p class="mt-0.5 text-sm">Laboratorio cerrado · {{ g.tickets.length }} PC(s)</p>
+                }
                 @case ('cambio_estado') {
                   <p class="mt-0.5 text-sm"><span class="text-slate-500">Cambio:</span> {{ g.tickets.length > 1 ? g.tickets.length + ' PCs · ' + g.primero.descripcion.split(': ')[1] : g.primero.descripcion }}</p>
                 }
@@ -265,7 +274,7 @@ interface FormTicket extends Partial<Atencion> {
           <!-- 1. Categoría -->
           <div>
             <label class="etiqueta"><span class="paso">1</span> ¿Qué tipo de atención?</label>
-            <div class="grid gap-2 sm:grid-cols-3">
+            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               @for (c of categorias; track c.valor) {
                 <button type="button" class="flex items-start gap-2 rounded-lg border-2 px-3 py-2 text-left transition"
                         [class]="f.categoria === c.valor ? 'border-marca-500 bg-marca-50' : 'border-slate-200 hover:border-slate-300'"
@@ -280,6 +289,18 @@ interface FormTicket extends Partial<Atencion> {
                 @for (t of subtiposTecnico; track t.valor) {
                   <button type="button" class="rounded-lg border px-3 py-1.5 text-left transition"
                           [class]="f.tipo === t.valor ? 'border-indigo-500 bg-indigo-600 text-white' : 'border-slate-300 hover:bg-slate-50'"
+                          [attr.aria-pressed]="f.tipo === t.valor" (click)="elegirTipo(f, t.valor)">
+                    <span class="block text-sm font-semibold">{{ t.texto }}</span>
+                    <span class="block text-xs" [class]="f.tipo === t.valor ? 'text-white/80' : 'text-slate-500'">{{ t.ayuda }}</span>
+                  </button>
+                }
+              </div>
+            }
+            @if (f.categoria === 'laboratorio') {
+              <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                @for (t of subtiposLaboratorio; track t.valor) {
+                  <button type="button" class="rounded-lg border px-3 py-1.5 text-left transition"
+                          [class]="f.tipo === t.valor ? 'border-violet-500 bg-violet-600 text-white' : 'border-slate-300 hover:bg-slate-50'"
                           [attr.aria-pressed]="f.tipo === t.valor" (click)="elegirTipo(f, t.valor)">
                     <span class="block text-sm font-semibold">{{ t.texto }}</span>
                     <span class="block text-xs" [class]="f.tipo === t.valor ? 'text-white/80' : 'text-slate-500'">{{ t.ayuda }}</span>
@@ -405,6 +426,14 @@ interface FormTicket extends Partial<Atencion> {
                 <p class="mt-2 text-xs text-slate-500">Al editar solo se corrigen los textos. Para cambiar cómo queda la PC, registra un correctivo nuevo o usa el croquis del laboratorio.</p>
                 }
               }
+              @case ('apertura_lab') {
+                <label class="etiqueta">Observaciones</label>
+                <textarea class="campo" rows="2" maxlength="1000" [(ngModel)]="f.solucion" name="solucion" placeholder="Ej: SCPC105 no encendió; el proyector tarda en prender"></textarea>
+              }
+              @case ('cierre_lab') {
+                <label class="etiqueta">Observaciones</label>
+                <textarea class="campo" rows="2" maxlength="1000" [(ngModel)]="f.solucion" name="solucion" placeholder="Ej: quedó una mochila olvidada; se apagó el aire"></textarea>
+              }
               @case ('personal') {
                 <div class="grid gap-3 sm:grid-cols-2">
                   <div>
@@ -451,6 +480,7 @@ interface FormTicket extends Partial<Atencion> {
                     {{ f.pcs.length ? f.pcs.length + ' PC(s) → ' + f.pcs.length + ' ticket(s)' : requierePcs(f) ? 'Marca al menos una' : 'Ninguna: 1 ticket para el laboratorio' }}
                   </span>
                 </label>
+                @if (esLabCompleto(f)) { <p class="mb-1 text-xs text-slate-500">Se marcaron todas las PCs activas del laboratorio. Desmarca las que no correspondan.</p> }
                 @if (f.tipo === 'correctivo') { <p class="mb-1 text-xs text-slate-500">En un correctivo puedes marcar PCs en mantenimiento, inactivas o de baja (para repararlas).</p> }
                 <app-laboratorio-croquis modo="seleccion" [ambienteId]="f.ambiente_id" [seleccion]="f.pcs" (seleccionChange)="f.pcs = $event"
                                          [permitirNoActivas]="f.tipo === 'correctivo'" />
@@ -543,6 +573,7 @@ export class AtencionesListaComponent implements OnInit {
   protected readonly tipos = TIPOS_TICKET;
   protected readonly categorias = CATEGORIAS_TICKET;
   protected readonly subtiposTecnico = SUBTIPOS_TECNICO;
+  protected readonly subtiposLaboratorio = SUBTIPOS_LABORATORIO;
   protected readonly colorCategoria = COLOR_CATEGORIA;
   protected readonly pedidos = PEDIDOS_DOCENTE;
   protected readonly acciones = ACCIONES_PROGRAMA;
@@ -677,6 +708,17 @@ export class AtencionesListaComponent implements OnInit {
     return !!yo && a.auxiliar_id !== yo && (a.colaboradores ?? []).includes(yo);
   }
 
+  protected esLabCompleto(f: FormTicket): boolean {
+    return !!f.tipo && TIPOS_LAB_COMPLETO.includes(f.tipo);
+  }
+
+  /** Marca todas las PCs activas del laboratorio elegido */
+  private marcarTodasLasPcs(f: FormTicket): void {
+    f.pcs = f.ambiente_id
+      ? this.catalogos.pcs().filter((pc) => pc.ambiente_id === f.ambiente_id && pc.estado === 'operativa').map((pc) => pc.id)
+      : [];
+  }
+
   protected requierePcs(f: FormTicket): boolean {
     return !!f.tipo && TIPOS_CON_PC.includes(f.tipo);
   }
@@ -733,13 +775,18 @@ export class AtencionesListaComponent implements OnInit {
 
   protected elegirCategoria(f: FormTicket, categoria: FormTicket['categoria']): void {
     f.categoria = categoria;
-    this.elegirTipo(f, categoria === 'tecnico' ? (TIPOS_CON_PC.includes(f.tipo!) ? f.tipo! : 'programas') : categoria);
+    const tipo: TipoAtencion = categoria === 'tecnico' ? (['programas', 'preventivo', 'correctivo'].includes(f.tipo!) ? f.tipo! : 'programas')
+      : categoria === 'laboratorio' ? (this.esLabCompleto(f) ? f.tipo! : 'apertura_lab') : categoria;
+    this.elegirTipo(f, tipo);
   }
 
   /** Cambiar de tipo limpia los datos propios del formulario anterior */
   protected elegirTipo(f: FormTicket, tipo: TipoAtencion): void {
     if (f.tipo !== tipo) f.det = {};
+    const eraLabCompleto = this.esLabCompleto(f);
     f.tipo = tipo;
+    // Abrir / cerrar lab: todas las PCs activas (si ya venía de abrir/cerrar, se respeta lo marcado)
+    if (this.esLabCompleto(f) && !eraLabCompleto && !f.id) this.marcarTodasLasPcs(f);
     // Fuera de un correctivo, las PCs que no estén activas se desmarcan
     if (tipo !== 'correctivo') {
       const activas = new Set(this.catalogos.pcs().filter((pc) => pc.estado === 'operativa').map((pc) => pc.id));
@@ -750,6 +797,7 @@ export class AtencionesListaComponent implements OnInit {
   protected elegirLab(f: FormTicket, id: number | null): void {
     if (f.ambiente_id !== id) f.pcs = [];
     f.ambiente_id = id;
+    if (this.esLabCompleto(f) && !f.pcs.length) this.marcarTodasLasPcs(f);
   }
 
   /** Edita el grupo completo: datos y PCs */
@@ -814,6 +862,10 @@ export class AtencionesListaComponent implements OnInit {
     const d = f.det;
     if (f.tipo === 'programas') return `${textoDe(ACCIONES_PROGRAMA, d.accion)}: ${d.programas?.trim()}`.slice(0, 500);
     if (f.tipo === 'preventivo') return `Preventivo: ${(d.checklist ?? []).map((c) => textoDe(CHECKLIST_PREVENTIVO, c)).join(', ')}`.slice(0, 500);
+    if (this.esLabCompleto(f)) {
+      const lab = this.laboratorios().find((l) => l.id === f.ambiente_id)?.codigo ?? '';
+      return `${f.tipo === 'apertura_lab' ? 'Apertura' : 'Cierre'} de ${lab}`.trim();
+    }
     return f.descripcion?.trim() ?? '';
   }
 

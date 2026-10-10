@@ -5,14 +5,16 @@ import { TipoAtencion } from './modelos';
  *  1. Atención a docente
  *  2. Técnico: programas, mantenimiento preventivo y correctivo
  *  3. Atención personal (académica)
+ *  4. Abrir / cerrar laboratorio (con todas sus PCs)
  * (+ "cambio de estado de PC", que lo registra el sistema).
  */
-export type CategoriaTicket = 'docente' | 'tecnico' | 'personal' | 'sistema';
+export type CategoriaTicket = 'docente' | 'tecnico' | 'personal' | 'laboratorio' | 'sistema';
 
 export const CATEGORIAS_TICKET: { valor: Exclude<CategoriaTicket, 'sistema'>; texto: string; ayuda: string; icono: string }[] = [
   { valor: 'docente', texto: 'Atención a docente', ayuda: 'Lo que pidió un docente en el laboratorio', icono: 'usuarios' },
   { valor: 'tecnico', texto: 'Técnico', ayuda: 'Programas y mantenimiento de las PCs', icono: 'equipo' },
   { valor: 'personal', texto: 'Atención personal', ayuda: 'Atención académica a una persona', icono: 'docente' },
+  { valor: 'laboratorio', texto: 'Abrir / cerrar lab', ayuda: 'Apertura o cierre con todas sus PCs', icono: 'candado' },
 ];
 
 export const TIPOS_TICKET: Record<TipoAtencion, { texto: string; corto: string; categoria: CategoriaTicket }> = {
@@ -21,8 +23,16 @@ export const TIPOS_TICKET: Record<TipoAtencion, { texto: string; corto: string; 
   preventivo: { texto: 'Técnico · Mant. preventivo', corto: 'Mant. preventivo', categoria: 'tecnico' },
   correctivo: { texto: 'Técnico · Mant. correctivo', corto: 'Mant. correctivo', categoria: 'tecnico' },
   personal: { texto: 'Atención personal', corto: 'Personal', categoria: 'personal' },
+  apertura_lab: { texto: 'Abrir laboratorio', corto: 'Abrir lab', categoria: 'laboratorio' },
+  cierre_lab: { texto: 'Cerrar laboratorio', corto: 'Cerrar lab', categoria: 'laboratorio' },
   cambio_estado: { texto: 'Cambio de estado de PC', corto: 'Cambio de estado', categoria: 'sistema' },
 };
+
+/** Abrir o cerrar el laboratorio */
+export const SUBTIPOS_LABORATORIO: { valor: TipoAtencion; texto: string; ayuda: string }[] = [
+  { valor: 'apertura_lab', texto: 'Abrir lab', ayuda: 'Se encendieron / revisaron las PCs' },
+  { valor: 'cierre_lab', texto: 'Cerrar lab', ayuda: 'Se apagaron las PCs y se cerró el lab' },
+];
 
 /** Subtipos del técnico */
 export const SUBTIPOS_TECNICO: { valor: TipoAtencion; texto: string; ayuda: string }[] = [
@@ -35,6 +45,7 @@ export const COLOR_CATEGORIA: Record<CategoriaTicket, string> = {
   docente: 'bg-sky-100 text-sky-800',
   tecnico: 'bg-indigo-100 text-indigo-800',
   personal: 'bg-teal-100 text-teal-800',
+  laboratorio: 'bg-violet-100 text-violet-800',
   sistema: 'bg-slate-100 text-slate-600',
 };
 
