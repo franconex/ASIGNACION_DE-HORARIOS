@@ -40,6 +40,18 @@ export function turnosDeHoy(programados: TurnoProgramado[], perfilId: string, ho
   return { actual, proximo };
 }
 
+/**
+ * Turno de un auxiliar en un día (igual que fn_turno_del_dia): el sábado,
+ * si hay rotación cargada para esa fecha, vale el turno de la rotación
+ * (o ninguno si no está en ella); si no, el de lunes a viernes.
+ */
+export function turnoDelDia(programados: TurnoProgramado[], rotacion: RotacionSabado[], perfilId: string, hoy: string):
+  { turno: TurnoCodigo | null; sabado: boolean } {
+  const delDia = new Date(hoy + 'T00:00:00').getDay() === 6 ? rotacion.filter((r) => r.fecha === hoy) : [];
+  if (delDia.length) return { turno: delDia.find((r) => r.auxiliar_id === perfilId)?.turno ?? null, sabado: true };
+  return { turno: turnosDeHoy(programados, perfilId, hoy).actual?.turno ?? null, sabado: false };
+}
+
 /** Columnas con relaciones embebidas para las atenciones */
 const SELECT_ATENCION =
   '*, ambiente:ambientes(codigo), pc:ambiente_pcs(etiqueta), docente:docentes(nombres, apellidos), ' +
@@ -424,15 +436,10 @@ export class OperacionService {
     return (data as unknown as RotacionSabado[]) ?? [];
   }
 
-  async guardarRotacion(fila: Partial<RotacionSabado>): Promise<void> {
-    const datos = { ...fila } as Record<string, unknown>;
-    const id = datos['id'];
-    delete datos['id'];
-    delete datos['auxiliar'];
-    const consulta = id
-      ? this.cliente.from('rotacion_sabados').update(datos).eq('id', id)
-      : this.cliente.from('rotacion_sabados').insert(datos);
-    const { error } = await consulta;
+  /** Pone a uno o varios auxiliares en un sábado (si ya estaban ese sábado, cambia su turno y nota) */
+  async guardarRotacion(filas: Pick<RotacionSabado, 'fecha' | 'auxiliar_id' | 'turno' | 'nota'>[]): Promise<void> {
+    if (!filas.length) return;
+    const { error } = await this.cliente.from('rotacion_sabados').upsert(filas, { onConflict: 'fecha,auxiliar_id' });
     if (error) throw new ErrorSistema(error);
   }
 

@@ -7,9 +7,9 @@ import { AuthService } from '../../core/auth.service';
 import { CatalogosService } from '../../core/catalogos.service';
 import { aMinutos, hhmm, horaActual } from '../../core/fechas';
 import { environment } from '../../../environments/environment';
-import { PcBajaCierre, ReporteTurno, TareaReporte, TurnoCodigo, TurnoProgramado } from '../../core/modelos';
+import { PcBajaCierre, ReporteTurno, RotacionSabado, TareaReporte, TurnoCodigo, TurnoProgramado } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
-import { OperacionService, textoRetraso, turnoDeLaHora, turnosDeHoy } from '../../core/operacion.service';
+import { OperacionService, textoRetraso, turnoDeLaHora, turnoDelDia } from '../../core/operacion.service';
 import { fechaActual } from '../../core/fechas';
 
 const TURNOS: { valor: TurnoCodigo; texto: string }[] = [
@@ -92,7 +92,7 @@ function horaLaPaz(): string {
           @if (auth.esAuxiliar()) {
             @if (miTurno(); as mio) {
               <p class="mb-3 rounded-lg bg-marca-50 px-3 py-2 text-sm text-marca-700">
-                Tu turno es <b>{{ nombreTurno[mio] }}</b> ({{ rangoDe(mio) }}).
+                Tu turno{{ hoyDia().sabado ? ' de este sábado' : '' }} es <b>{{ nombreTurno[mio] }}</b> ({{ rangoDe(mio) }}).
                 @if (!enTurno()) {
                   Podrás cerrarlo desde las {{ inicioDe(mio) }}.
                 } @else if (retraso() > 0) {
@@ -102,7 +102,9 @@ function horaLaPaz(): string {
                 }
               </p>
             } @else {
-              <p class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">No tienes turno asignado. Pide al encargado que lo programe en Auxiliares.</p>
+              <p class="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {{ hoyDia().sabado ? 'Hoy no estás en la rotación del sábado.' : 'No tienes turno asignado. Pide al encargado que lo programe en Auxiliares.' }}
+              </p>
             }
           }
 
@@ -318,13 +320,16 @@ export class TurnoComponent implements OnInit, OnDestroy {
   protected readonly guardando = signal(false);
   /** Turnos programados de todo el personal (se filtra el propio en miTurno) */
   private readonly programados = signal<TurnoProgramado[]>([]);
+  /** Rotación de sábados (el sábado manda sobre el turno de lunes a viernes) */
+  private readonly rotacion = signal<RotacionSabado[]>([]);
 
-  /** Turno programado del auxiliar para hoy (admin y encargado no tienen turno) */
-  protected readonly miTurno = computed<TurnoCodigo | null>(() => {
+  /** Turno del auxiliar para hoy, sábado incluido (admin y encargado no tienen turno) */
+  protected readonly hoyDia = computed(() => {
     const id = this.auth.perfil()?.id;
-    if (!id || !this.auth.esAuxiliar()) return null;
-    return turnosDeHoy(this.programados(), id, fechaActual(environment.zonaHoraria)).actual?.turno ?? null;
+    if (!id || !this.auth.esAuxiliar()) return { turno: null, sabado: false };
+    return turnoDelDia(this.programados(), this.rotacion(), id, fechaActual(environment.zonaHoraria));
   });
+  protected readonly miTurno = computed<TurnoCodigo | null>(() => this.hoyDia().turno);
   /** El auxiliar cierra y edita desde que empieza su turno (después de la hora de fin, con retraso); admin y encargado siempre */
   protected readonly enTurno = computed(() => {
     if (!this.auth.esAuxiliar()) return true;
@@ -377,12 +382,14 @@ export class TurnoComponent implements OnInit, OnDestroy {
     // Fotos vencidas (después de las 12:00): se borran; si falla, se reintenta la próxima vez
     await this.op.limpiarFotosReporte().catch((e) => console.error(e));
     try {
-      const [reportes, pendientes, programados] = await Promise.all([
-        this.op.listarReportes(), this.op.tareasPendientes(), this.op.listarTurnosProgramados(), this.op.cargarHorarios(),
+      const [reportes, pendientes, programados, rotacion] = await Promise.all([
+        this.op.listarReportes(), this.op.tareasPendientes(), this.op.listarTurnosProgramados(), this.op.listarRotacion(),
+        this.op.cargarHorarios(),
       ]);
       this.reportes.set(reportes);
       this.pendientes.set(pendientes);
       this.programados.set(programados);
+      this.rotacion.set(rotacion);
       this.turno.set(this.miTurno() ?? this.turnoAhora());
       await this.cargarMisBajas();
       const ahora = Date.now();
