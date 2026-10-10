@@ -7,6 +7,11 @@
 /** 'invitado' = entró con Google y espera que el admin le asigne un rol */
 export type Rol = 'admin' | 'auxiliar' | 'decano' | 'encargado' | 'invitado';
 
+/** Nombre de cada rol para mostrar (el encargado también es auxiliar: hace y suma tickets) */
+export const NOMBRE_ROL: Record<Rol, string> = {
+  admin: 'Administrador', auxiliar: 'Auxiliar', decano: 'Decano', encargado: 'Encargado de auxiliares', invitado: 'Invitado',
+};
+
 /** Código de turno de trabajo */
 export type TurnoCodigo = 'M' | 'MD' | 'T' | 'N';
 
@@ -273,6 +278,8 @@ export interface Atencion {
   estado: EstadoAtencion;
   auxiliar_id: string | null;
   creado_en: string;
+  /** El auxiliar lo registró fuera de su turno del día (lo calcula la base) */
+  fuera_de_turno?: boolean;
   resuelto_por: string | null;
   resuelto_en: string | null;
   /** Ficha de reparación (correctivo): fallas del catálogo, otra falla, pieza y estados */
@@ -285,7 +292,7 @@ export interface Atencion {
   ambiente?: { codigo: string } | null;
   pc?: { etiqueta: string } | null;
   docente?: { nombres: string; apellidos: string } | null;
-  autor?: { nombre_completo: string } | null;
+  autor?: { nombre_completo: string; rol?: Rol } | null;
 }
 
 /** Tarea pendiente que deja un reporte de turno */

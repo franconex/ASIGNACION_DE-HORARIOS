@@ -2,7 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { AuthService } from '../../core/auth.service';
 import { environment } from '../../../environments/environment';
 import { fechaActual, fechaCorta, fechaLarga, hhmm } from '../../core/fechas';
-import { TurnoCodigo, TurnoProgramado } from '../../core/modelos';
+import { RotacionSabado, TurnoCodigo, TurnoProgramado } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { OperacionService, turnosDeHoy } from '../../core/operacion.service';
 
@@ -10,7 +10,8 @@ const NOMBRE_TURNO: Record<TurnoCodigo, string> = { M: 'Mañana', MD: 'Mediodía
 
 /**
  * Horario del auxiliar: su turno actual y el próximo, con la fecha en que
- * empieza. Los turnos los programa el admin o el encargado en Auxiliares.
+ * empieza, y los sábados que le tocan (con quién comparte cada uno).
+ * Los turnos los programa el admin o el encargado en Auxiliares.
  */
 @Component({
   selector: 'app-horario',
@@ -23,7 +24,7 @@ const NOMBRE_TURNO: Record<TurnoCodigo, string> = { M: 'Mañana', MD: 'Mediodía
 
     @if (cargando()) {
       <p class="tarjeta py-10 text-center text-sm text-slate-500">Cargando…</p>
-    } @else if (!auth.esAuxiliar()) {
+    } @else if (!auth.esAuxiliar() && !auth.esEncargado()) {
       <p class="tarjeta py-10 text-center text-sm text-slate-500">El horario de turnos es de los auxiliares.</p>
     } @else {
       <section class="grid gap-3 sm:grid-cols-2">
@@ -48,6 +49,28 @@ const NOMBRE_TURNO: Record<TurnoCodigo, string> = { M: 'Mañana', MD: 'Mediodía
             <p class="mt-1 text-lg font-semibold text-slate-500">Aún no hay un cambio programado</p>
           }
         </article>
+      </section>
+
+      <section class="mt-6">
+        <h2 class="mb-1 text-lg font-semibold">Mis sábados</h2>
+        <p class="mb-2 text-sm text-slate-600">El sábado vale este turno, no el de lunes a viernes.</p>
+        <div class="space-y-2">
+          @for (s of misSabados(); track s.id) {
+            <article class="tarjeta flex flex-wrap items-center gap-3 border-l-4 p-3"
+                     [class]="s.fecha === hoy() ? 'border-l-emerald-500' : 'border-l-indigo-500'">
+              <div class="min-w-0 flex-1">
+                <p class="font-semibold capitalize">{{ fechaLarga(s.fecha) }}
+                  @if (s.fecha === hoy()) { <span class="chip ml-1 bg-emerald-100 text-emerald-700 normal-case">Hoy</span> }
+                </p>
+                @if (s.turno) { <p class="text-sm text-slate-600">{{ nombre(s.turno) }} · {{ horarioDe(s.turno) }}</p> }
+                @if (companerosDe(s); as otros) { <p class="text-xs text-slate-500">Con {{ otros }}</p> }
+                @if (s.nota) { <p class="text-xs text-slate-500">{{ s.nota }}</p> }
+              </div>
+            </article>
+          } @empty {
+            <p class="tarjeta py-6 text-center text-sm text-slate-500">No tienes sábados asignados próximamente.</p>
+          }
+        </div>
       </section>
 
       <section class="mt-6">
@@ -84,6 +107,8 @@ export class HorarioComponent implements OnInit {
 
   protected readonly cargando = signal(true);
   private readonly programados = signal<TurnoProgramado[]>([]);
+  /** Rotación de sábados de todos (para saber con quién me toca) */
+  private readonly rotacion = signal<RotacionSabado[]>([]);
   protected readonly hoy = signal(fechaActual(environment.zonaHoraria));
   protected readonly fechaCorta = fechaCorta;
   protected readonly fechaLarga = fechaLarga;
@@ -92,6 +117,12 @@ export class HorarioComponent implements OnInit {
   protected readonly misTurnos = computed(() => {
     const id = this.auth.perfil()?.id;
     return this.programados().filter((t) => t.perfil_id === id).sort((a, b) => b.desde.localeCompare(a.desde));
+  });
+  /** Mis sábados de hoy en adelante (el más cercano primero) */
+  protected readonly misSabados = computed(() => {
+    const id = this.auth.perfil()?.id;
+    return this.rotacion().filter((r) => r.auxiliar_id === id && r.fecha >= this.hoy())
+      .sort((a, b) => a.fecha.localeCompare(b.fecha));
   });
   /** Turno vigente y próximo, según la fecha de hoy */
   protected readonly horario = computed(() => {
@@ -105,8 +136,11 @@ export class HorarioComponent implements OnInit {
 
   private async cargar(): Promise<void> {
     try {
-      const [programados] = await Promise.all([this.op.listarTurnosProgramados(), this.op.cargarHorarios()]);
+      const [programados, rotacion] = await Promise.all([
+        this.op.listarTurnosProgramados(), this.op.listarRotacion(), this.op.cargarHorarios(),
+      ]);
       this.programados.set(programados);
+      this.rotacion.set(rotacion);
     } catch (e) {
       this.notificaciones.error(e, 'No se cargó el horario');
     } finally {
@@ -116,6 +150,12 @@ export class HorarioComponent implements OnInit {
 
   protected nombre(turno: TurnoCodigo): string {
     return NOMBRE_TURNO[turno];
+  }
+
+  /** Nombres de los demás que están ese mismo sábado ('' si voy solo) */
+  protected companerosDe(s: RotacionSabado): string {
+    return this.rotacion().filter((r) => r.fecha === s.fecha && r.auxiliar_id !== s.auxiliar_id)
+      .map((r) => `${r.auxiliar?.nombre_completo ?? '¿?'}${r.turno && r.turno !== s.turno ? ` (${NOMBRE_TURNO[r.turno]})` : ''}`).join(', ');
   }
 
   /** '07:00 – 12:00' según los horarios configurados */

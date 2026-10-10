@@ -8,7 +8,7 @@ import { ModalComponent } from '../../compartido/modal.component';
 import { AuthService } from '../../core/auth.service';
 import { CatalogosService } from '../../core/catalogos.service';
 import { descargarCsv } from '../../core/exportar';
-import { AmbientePc, Atencion, EstadoAtencion, Perfil, SolicitudBaja, TipoAtencion, TurnoCodigo } from '../../core/modelos';
+import { AmbientePc, Atencion, EstadoAtencion, NOMBRE_ROL, Perfil, SolicitudBaja, TipoAtencion, TurnoCodigo } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { FiltroOperacion, OperacionService } from '../../core/operacion.service';
 import {
@@ -210,6 +210,12 @@ interface FormTicket extends Partial<Atencion> {
                 @if (g.tickets.length > 8) { <span class="chip bg-slate-100 text-slate-600">+{{ g.tickets.length - 8 }}</span> }
                 @if (g.tickets.length > 1) { <span class="chip bg-indigo-100 text-indigo-700">{{ g.tickets.length }} PCs · {{ g.tickets.length }} tickets</span> }
                 <span class="text-xs text-slate-400">{{ g.primero.autor?.nombre_completo ? 'registró ' + g.primero.autor?.nombre_completo : '' }}</span>
+                @if (g.primero.autor?.rol === 'encargado') {
+                  <span class="chip bg-marca-50 text-marca-700">{{ nombreRol.encargado }}</span>
+                }
+                @if (g.primero.fuera_de_turno) {
+                  <span class="chip bg-orange-100 text-orange-800" title="Lo registró fuera de su turno del día">Fuera de turno</span>
+                }
                 @if (colaboreEn(g.primero)) {
                   <span class="chip bg-amber-100 text-amber-800">Colaboraste</span>
                 }
@@ -581,6 +587,7 @@ export class AtencionesListaComponent implements OnInit {
   protected readonly resultados = RESULTADOS_CORRECTIVO;
   protected readonly tiposPersona = TIPOS_PERSONA;
   protected readonly textoDe = textoDe;
+  protected readonly nombreRol = NOMBRE_ROL;
   protected readonly prioridades = PRIORIDADES;
   protected readonly estados = ESTADOS;
 
@@ -602,7 +609,7 @@ export class AtencionesListaComponent implements OnInit {
     const lista = this.companeros().filter((p) => !texto || normalizar(p.nombre_completo).includes(texto));
     return [
       { titulo: 'Auxiliares', personas: lista.filter((p) => p.rol === 'auxiliar') },
-      { titulo: 'Encargados', personas: lista.filter((p) => p.rol === 'encargado') },
+      { titulo: 'Encargados de auxiliares', personas: lista.filter((p) => p.rol === 'encargado') },
     ].filter((g) => g.personas.length);
   });
   protected readonly colabAbierto = signal(false);
@@ -1031,11 +1038,12 @@ export class AtencionesListaComponent implements OnInit {
         new Date(a.creado_en).toLocaleString('es-BO'),
         TIPOS_TICKET[a.tipo]?.texto ?? a.tipo, a.ambiente?.codigo ?? '', a.pc?.etiqueta ?? '', this.solicitante(a),
         PRIORIDADES[a.prioridad].texto, ESTADOS[a.estado].texto,
-        a.descripcion, a.solucion ?? '', extra, a.autor?.nombre_completo ?? '',
+        a.descripcion, a.solucion ?? '', extra, (a.autor?.nombre_completo ?? '') + (a.autor?.rol === 'encargado' ? ` (${NOMBRE_ROL.encargado})` : ''),
         (a.colaboradores ?? []).map((id) => this.nombres().get(id) ?? '').join(', '),
+        a.fuera_de_turno ? 'Sí' : '',
       ];
     });
     descargarCsv('tickets', ['Fecha', 'Tipo', 'Laboratorio', 'PC', 'Docente / persona', 'Prioridad', 'Estado', 'Motivo / falla',
-      'Solución', 'Detalles', 'Registró', 'Colaboradores'], filas);
+      'Solución', 'Detalles', 'Registró', 'Colaboradores', 'Fuera de turno'], filas);
   }
 }

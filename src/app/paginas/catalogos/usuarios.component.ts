@@ -59,7 +59,7 @@ interface FormUsuario {
                 </select>
               </td>
               <td>
-                <select class="campo !w-28 !py-1" [ngModel]="u.turno_habitual ?? ''" (ngModelChange)="actualizar(u, { turno_habitual: $event || null })" [disabled]="u.rol !== 'auxiliar'">
+                <select class="campo !w-28 !py-1" [ngModel]="u.turno_habitual ?? ''" (ngModelChange)="actualizar(u, { turno_habitual: $event || null })" [disabled]="u.rol !== 'auxiliar' && u.rol !== 'encargado'">
                   @for (t of turnos; track t.valor) { <option [value]="t.valor">{{ t.texto }}</option> }
                 </select>
               </td>

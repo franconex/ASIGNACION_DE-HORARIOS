@@ -4,6 +4,7 @@ import { IconoComponent } from '../../compartido/icono.component';
 import { PanelLateralComponent } from '../../compartido/panel-lateral.component';
 import { TemaService } from '../../core/tema.service';
 import { AuthService } from '../../core/auth.service';
+import { NOMBRE_ROL } from '../../core/modelos';
 import { CatalogosService } from '../../core/catalogos.service';
 import { PanelesService } from '../../core/paneles.service';
 import { environment } from '../../../environments/environment';
@@ -83,10 +84,10 @@ interface ItemMenu {
 
         <div class="flex items-center gap-3 border-t border-white/10 p-4" [class.lg:flex-col]="colapsado()" [class.lg:gap-1]="colapsado()" [class.lg:px-2]="colapsado()">
           <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white"
-               [title]="(auth.perfil()?.nombre_completo ?? '') + ' · ' + (auth.perfil()?.rol ?? '')">{{ iniciales() }}</div>
+               [title]="(auth.perfil()?.nombre_completo ?? '') + ' · ' + nombreRol()">{{ iniciales() }}</div>
           <div class="min-w-0 flex-1" [class.lg:hidden]="colapsado()">
             <p class="truncate text-sm font-medium text-white">{{ auth.perfil()?.nombre_completo }}</p>
-            <p class="text-xs text-white/55 capitalize">{{ auth.perfil()?.rol }}</p>
+            <p class="text-xs text-white/55">{{ nombreRol() }}</p>
           </div>
           <button class="rounded-md p-2 hover:bg-white/10 hover:text-white" (click)="tema.alternar()"
                   [title]="tema.modo() === 'oscuro' ? 'Modo claro' : 'Modo oscuro'" [attr.aria-label]="tema.modo() === 'oscuro' ? 'Activar modo claro' : 'Activar modo oscuro'">
@@ -145,7 +146,7 @@ export class LayoutComponent implements OnInit {
   private readonly items: ItemMenu[] = [
     { ruta: '/', texto: 'Inicio', icono: 'panel' },
     { ruta: '/turno', texto: 'Cerrar turno', icono: 'hora', visible: (a) => a.puedeOperar() },
-    { ruta: '/horario', texto: 'Horario', icono: 'calendario', visible: (a) => a.esAuxiliar() },
+    { ruta: '/horario', texto: 'Horario', icono: 'calendario', visible: (a) => a.esAuxiliar() || a.esEncargado() },
     { ruta: '/atenciones', texto: 'Atenciones', icono: 'registros', visible: (a) => a.puedeOperar() },
     { ruta: '/objetos-perdidos', texto: 'Objetos perdidos', icono: 'objeto', visible: (a) => a.puedeOperar() },
     { ruta: '/desempeno', texto: 'Desempeño', icono: 'grafico', visible: (a) => a.puedeGestionarAuxiliares() },
@@ -172,6 +173,11 @@ export class LayoutComponent implements OnInit {
   }
 
   /** Iniciales del usuario para el avatar */
+  protected nombreRol(): string {
+    const rol = this.auth.perfil()?.rol;
+    return rol ? NOMBRE_ROL[rol] : '';
+  }
+
   protected iniciales(): string {
     return (this.auth.perfil()?.nombre_completo ?? '?').split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
   }

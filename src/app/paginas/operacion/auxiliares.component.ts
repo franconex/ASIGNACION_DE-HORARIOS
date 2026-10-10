@@ -2,7 +2,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IconoComponent } from '../../compartido/icono.component';
 import { ModalComponent } from '../../compartido/modal.component';
-import { CategoriaFalla, FallaPc, HorarioTurno, Perfil, RotacionSabado, TurnoCodigo, TurnoProgramado } from '../../core/modelos';
+import { CategoriaFalla, FallaPc, HorarioTurno, NOMBRE_ROL, Perfil, RotacionSabado, TurnoCodigo, TurnoProgramado } from '../../core/modelos';
 import { CATEGORIAS_FALLA } from '../../core/tickets';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { OperacionService, turnosDeHoy } from '../../core/operacion.service';
@@ -15,6 +15,8 @@ const NOMBRE_TURNO: Record<string, string> = { M: 'Mañana', MD: 'Mediodía', T:
  * Apartado de Auxiliares (admin y encargado): el equipo con su turno actual
  * y próximo. Para cada uno se elige el turno y la fecha en que empieza a
  * correr; y los turnos de sábado (uno o varios auxiliares por sábado).
+ * Los encargados de auxiliares también rotan y aparecen aquí (pero cierran
+ * cualquier turno, no solo el suyo).
  */
 @Component({
   selector: 'app-auxiliares',
@@ -110,7 +112,7 @@ const NOMBRE_TURNO: Record<string, string> = { M: 'Mañana', MD: 'Mediodía', T:
         <article class="tarjeta p-3">
           <div class="mb-2 flex items-start justify-between gap-2">
             <div class="min-w-0">
-              <p class="truncate font-medium">{{ u.nombre_completo }}</p>
+              <p class="truncate font-medium">{{ u.nombre_completo }}@if (u.rol === 'encargado') { <span class="chip ml-1 bg-marca-50 text-marca-700">{{ nombreRol.encargado }}</span> }</p>
               <p class="truncate text-xs text-slate-500">{{ u.correo }}</p>
             </div>
             <span class="chip shrink-0" [class]="u.activo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'">{{ u.activo ? 'Activo' : 'Inactivo' }}</span>
@@ -144,7 +146,7 @@ const NOMBRE_TURNO: Record<string, string> = { M: 'Mañana', MD: 'Mediodía', T:
           @for (u of auxiliares(); track u.id) {
             <tr>
               <td>
-                <p class="font-medium">{{ u.nombre_completo }}</p>
+                <p class="font-medium">{{ u.nombre_completo }}@if (u.rol === 'encargado') { <span class="chip ml-1 bg-marca-50 text-marca-700">{{ nombreRol.encargado }}</span> }</p>
                 <p class="text-xs text-slate-500">{{ u.correo }}</p>
               </td>
               <td>{{ textoTurno(u.id, 'actual') }}</td>
@@ -231,6 +233,7 @@ export class AuxiliaresComponent implements OnInit {
   private readonly notificaciones = inject(NotificacionesService);
 
   protected readonly nombreTurno = NOMBRE_TURNO;
+  protected readonly nombreRol = NOMBRE_ROL;
   protected readonly auxiliares = signal<Perfil[]>([]);
   protected readonly rotacion = signal<RotacionSabado[]>([]);
   protected readonly turnosProgramados = signal<TurnoProgramado[]>([]);

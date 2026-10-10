@@ -108,6 +108,12 @@ function horaLaPaz(): string {
             }
           }
 
+          @if (auth.esEncargado() && miTurno(); as mio) {
+            <p class="mb-3 rounded-lg bg-marca-50 px-3 py-2 text-sm text-marca-700">
+              Tu turno{{ hoyDia().sabado ? ' de este sábado' : '' }} es <b>{{ nombreTurno[mio] }}</b> ({{ rangoDe(mio) }}). Como encargado de auxiliares puedes cerrar cualquier turno.
+            </p>
+          }
+
           @if (!auth.esAuxiliar()) {
           <label class="etiqueta">¿De qué turno es el reporte?</label>
           <div class="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 sm:grid-cols-4">
@@ -323,10 +329,10 @@ export class TurnoComponent implements OnInit, OnDestroy {
   /** Rotación de sábados (el sábado manda sobre el turno de lunes a viernes) */
   private readonly rotacion = signal<RotacionSabado[]>([]);
 
-  /** Turno del auxiliar para hoy, sábado incluido (admin y encargado no tienen turno) */
+  /** Turno de hoy del auxiliar o del encargado (también rota), sábado incluido; el admin no tiene turno */
   protected readonly hoyDia = computed(() => {
     const id = this.auth.perfil()?.id;
-    if (!id || !this.auth.esAuxiliar()) return { turno: null, sabado: false };
+    if (!id || !(this.auth.esAuxiliar() || this.auth.esEncargado())) return { turno: null, sabado: false };
     return turnoDelDia(this.programados(), this.rotacion(), id, fechaActual(environment.zonaHoraria));
   });
   protected readonly miTurno = computed<TurnoCodigo | null>(() => this.hoyDia().turno);

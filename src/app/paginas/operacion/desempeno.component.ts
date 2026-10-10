@@ -11,7 +11,7 @@ import { descargarCsv } from '../../core/exportar';
 import { DIAS_CORTOS, DIAS_SEMANA, fechaCorta, hoyIso, sumarDias } from '../../core/fechas';
 import { OperacionService, textoRetraso } from '../../core/operacion.service';
 import { CATEGORIAS_FALLA, CategoriaTicket, COLOR_CATEGORIA, TIPOS_TICKET } from '../../core/tickets';
-import { CategoriaFalla, EstadoPc, TipoAtencion, TurnoCodigo } from '../../core/modelos';
+import { CategoriaFalla, EstadoPc, NOMBRE_ROL, Rol, TipoAtencion, TurnoCodigo } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { SupabaseService } from '../../core/supabase.service';
 
@@ -27,7 +27,7 @@ interface Dashboard {
   por_tipo: { tipo: TipoAtencion; tickets: number; trabajos: number }[];
   por_lab: { id: number; codigo: string; color: string; tickets: number; pendientes: number; pcs: ConteoPcs }[];
   auxiliares: {
-    id: string; nombre: string; rol: string; turno: TurnoCodigo | null;
+    id: string; nombre: string; rol: Rol; turno: TurnoCodigo | null;
     registrados: number; trabajos: number; colaboraciones: number; participaciones: number;
     resueltos: number; pcs_atendidas: number; reportes: number; tareas_hechas: number;
   }[];
@@ -348,7 +348,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
           <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
             <div>
               <h2 class="flex items-center gap-2 font-semibold"><app-icono nombre="trofeo" [tamano]="17" /> Ranking de auxiliares</h2>
-              <p class="text-xs text-slate-500">Tickets en los que participó cada uno</p>
+              <p class="text-xs text-slate-500">Tickets en los que participó cada uno (incluye a los encargados de auxiliares)</p>
             </div>
             <div class="flex gap-3 text-xs text-slate-600">
               <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--serie-1)]"></span> Registró</span>
@@ -367,7 +367,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                 <span class="text-center text-sm font-bold" [class]="i === 0 && a.participaciones ? 'text-amber-600' : 'text-slate-400'">{{ i + 1 }}</span>
                 <span class="min-w-0">
                   <span class="block truncate text-sm font-medium">{{ a.nombre }}</span>
-                  <span class="block text-[10px] text-slate-400">{{ a.turno ? turnos[a.turno] : a.rol }}</span>
+                  <span class="block text-[10px] text-slate-400">{{ a.rol === 'encargado' ? nombreRol.encargado : a.turno ? turnos[a.turno] : nombreRol[a.rol] }}</span>
                 </span>
                 <span class="flex items-center gap-2">
                   <span class="flex h-5 min-w-0 gap-[2px]" [style.width.%]="(a.participaciones / topeAux()) * 85">
@@ -399,7 +399,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
               @for (a of d.auxiliares; track a.id) {
                 <tr>
                   <td class="font-medium">{{ a.nombre }}</td>
-                  <td class="text-sm text-slate-500">{{ a.turno ? turnos[a.turno] : '—' }}</td>
+                  <td class="text-sm text-slate-500">{{ a.rol === 'encargado' ? nombreRol.encargado : a.turno ? turnos[a.turno] : '—' }}</td>
                   <td class="text-right font-semibold tabular-nums">{{ a.participaciones }}</td>
                   <td class="text-right tabular-nums">{{ a.registrados }}</td>
                   <td class="text-right tabular-nums">{{ a.trabajos }}</td>
@@ -997,6 +997,7 @@ export class DesempenoComponent implements OnInit {
 
   protected readonly tipos = TIPOS;
   protected readonly turnos = TURNOS;
+  protected readonly nombreRol = NOMBRE_ROL;
   protected readonly estadosPc = ESTADOS_PC;
   protected readonly mesActual = hoyIso().slice(0, 7);
 

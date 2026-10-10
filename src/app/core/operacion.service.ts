@@ -55,7 +55,7 @@ export function turnoDelDia(programados: TurnoProgramado[], rotacion: RotacionSa
 /** Columnas con relaciones embebidas para las atenciones */
 const SELECT_ATENCION =
   '*, ambiente:ambientes(codigo), pc:ambiente_pcs(etiqueta), docente:docentes(nombres, apellidos), ' +
-  'autor:perfiles!atenciones_auxiliar_id_fkey(nombre_completo)';
+  'autor:perfiles!atenciones_auxiliar_id_fkey(nombre_completo, rol)';
 
 /** Columnas con relaciones embebidas para el turno */
 const SELECT_TURNO =
@@ -408,9 +408,9 @@ export class OperacionService {
 
   // ----- Auxiliares y rotación -----
 
-  /** Lista de auxiliares (rol auxiliar) para el apartado Auxiliares */
+  /** Auxiliares y encargados de auxiliares (también rotan) para el apartado Auxiliares */
   async listarAuxiliares(): Promise<Perfil[]> {
-    const { data, error } = await this.cliente.from('perfiles').select('*').eq('rol', 'auxiliar').order('nombre_completo');
+    const { data, error } = await this.cliente.from('perfiles').select('*').in('rol', ['auxiliar', 'encargado']).order('nombre_completo');
     if (error) throw new ErrorSistema(error);
     return (data as Perfil[]) ?? [];
   }
