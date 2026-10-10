@@ -19,7 +19,7 @@ import { TemaService } from '../../core/tema.service';
 const INICIO_DIA = 7 * 60;
 const FIN_DIA = 22 * 60;
 /** Píxeles por minuto en la grilla (60 px por hora) */
-const PX_MINUTO = 1;
+const PX_MINUTO = 1.25;
 /** Las selecciones se ajustan a cuartos de hora */
 const PASO = 15;
 /** Con el dedo: tiempo que hay que mantener presionado para empezar a seleccionar */
@@ -71,7 +71,8 @@ interface Tramo {
           <div class="grid grid-cols-7 gap-px">
             @for (d of diasDelMes(); track d.fecha) {
               <button class="relative h-8 rounded text-sm tabular-nums transition" [class]="claseDia(d)" (click)="irAFecha(d.fecha)"
-                      [disabled]="!d.delMes" [attr.aria-label]="d.fecha" [attr.aria-pressed]="d.fecha === fecha()">
+                      [disabled]="!d.delMes" [attr.aria-label]="d.fecha" [attr.aria-pressed]="d.fecha === fecha()"
+                      [title]="catalogos.motivoNoLaborable(d.fecha) ?? ''">
                 {{ d.delMes ? d.numero : '' }}
                 @if (d.especial && d.delMes) {
                   <span class="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full" [class]="d.fecha === fecha() ? 'bg-white' : 'bg-orange-500'"></span>
@@ -80,7 +81,10 @@ interface Tramo {
             }
           </div>
           <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
-            <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-orange-500"></span> Evento o cesión</span>
+            <span class="flex items-center gap-2">
+              <span class="flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-orange-500"></span> Evento o cesión</span>
+              <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-sm bg-red-100 ring-1 ring-red-300"></span> Feriado</span>
+            </span>
             @if (fecha() !== hoy()) { <button class="font-medium text-marca-700 hover:underline" (click)="irAFecha(hoy())">Ir a hoy</button> }
           </div>
         </section>
@@ -124,6 +128,11 @@ interface Tramo {
       <section class="min-w-0 flex-1">
         <header class="mb-3">
           <h1 class="text-2xl font-semibold tracking-tight">{{ tituloDia() }}</h1>
+          @if (noLaborable(); as motivo) {
+            <p class="mt-1 inline-flex items-center gap-1.5 rounded-md bg-red-50 px-2 py-1 text-sm font-medium text-red-700">
+              <app-icono nombre="suspender" [tamano]="15" /> {{ motivo }}. No se asignan clases ni eventos este día.
+            </p>
+          }
           <p class="mt-0.5 text-slate-600">
             @if (cargando()) { Cargando… }
             @else if (hora()) {
@@ -131,7 +140,7 @@ interface Tramo {
             } @else {
               <b class="text-emerald-700">{{ sinUso() }}</b> de {{ laboratorios().length }} laboratorios sin nada agendado.
             }
-            @if (auth.puedeEditar() && !esPasado()) {
+            @if (auth.puedeEditar() && !esPasado() && !noLaborable()) {
               <span class="text-slate-500">{{ tactil ? 'Toque, o mantenga presionado y deslice,' : 'Arrastre' }} para asignar; sobre una clase podrá crear un evento (reubica al docente).</span>
             }
             @if (totalConflictos()) {
@@ -153,14 +162,14 @@ interface Tramo {
                 <span class="flex items-center gap-1.5 font-semibold">
                   <span class="h-2 w-2 shrink-0 rounded-full" [style.background]="a.color"></span>{{ a.codigo }}
                 </span>
-                <span class="mt-0.5 block truncate text-xs" [class]="claseEstado(a)">{{ textoEstado(a) }}</span>
+                <span class="mt-0.5 block truncate text-[13px]" [class]="claseEstado(a)">{{ textoEstado(a) }}</span>
               </button>
             }
 
             <!-- Columna de horas -->
             <div class="sticky left-0 z-10 border-r border-slate-200 bg-superficie" [style.height.px]="altoGrilla">
               @for (h of horas; track h; let primera = $first; let ultima = $last) {
-                <span class="absolute right-2 text-[11px] text-slate-400 tabular-nums"
+                <span class="absolute right-2 text-xs text-slate-500 tabular-nums"
                       [class]="primera ? 'translate-y-0.5' : ultima ? '-translate-y-full' : '-translate-y-1/2'"
                       [style.top.px]="(h - inicioDia) * px">{{ etiquetaHora(h) }}</span>
               }
@@ -175,13 +184,16 @@ interface Tramo {
                 @if (minutosPasados() > inicioDia) {
                   <div class="pointer-events-none absolute inset-x-0 top-0 bg-slate-100/80" [style.height.px]="(minutosPasados() - inicioDia) * px"></div>
                 }
+                @if (noLaborable()) {
+                  <div class="pointer-events-none absolute inset-0 bg-slate-100/60"></div>
+                }
                 @if (a.estado === 'mantenimiento') {
                   <div class="pointer-events-none absolute inset-0 flex items-start justify-center bg-slate-100/80 pt-8 text-xs text-slate-500">En mantenimiento</div>
                 }
 
                 <!-- Ocupaciones -->
                 @for (o of ocupacionesDe(a.id); track o.clave) {
-                  <button class="absolute inset-x-1 overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-left text-xs leading-tight transition hover:z-10 hover:shadow-md"
+                  <button class="absolute inset-x-1 overflow-hidden rounded-md border-l-[3px] px-2 py-1 text-left text-[13px] leading-snug transition hover:z-10 hover:shadow-md"
                           [style.top.px]="(aMinutos(o.hora_inicio) - inicioDia) * px + 1"
                           [style.height.px]="(aMinutos(o.hora_fin) - aMinutos(o.hora_inicio)) * px - 2"
                           [style.border-left-color]="colorOcupacion(o)" [style.background]="colorOcupacion(o) + (tema.modo() === 'oscuro' ? '3a' : '1c')"
@@ -197,7 +209,7 @@ interface Tramo {
                 <!-- Selección en curso -->
                 @if (seleccion(); as s) {
                   @if (s.ambienteId === a.id) {
-                    <div class="pointer-events-none absolute inset-x-1 z-10 flex items-center justify-center rounded-md border-2 border-dashed text-xs font-semibold tabular-nums"
+                    <div class="pointer-events-none absolute inset-x-1 z-10 flex items-center justify-center rounded-md border-2 border-dashed text-sm font-semibold tabular-nums"
                          [class]="seleccionPisaClase() ? 'border-amber-500 bg-amber-100/80 text-amber-900' : 'border-emerald-600 bg-emerald-100/80 text-emerald-800'"
                          [style.top.px]="(s.inicio - inicioDia) * px" [style.height.px]="(s.fin - s.inicio) * px">
                       {{ etiquetaMinutos(s.inicio) }}–{{ etiquetaMinutos(s.fin) }}
@@ -305,13 +317,15 @@ export class PanelDiaComponent implements OnDestroy {
   }, 30_000);
 
   protected readonly esHoy = computed(() => this.fecha() === this.hoy());
+  /** Feriado o domingo: el día se ve, pero no se puede asignar nada */
+  protected readonly noLaborable = computed(() => this.catalogos.motivoNoLaborable(this.fecha()));
   protected readonly esPasado = computed(() => this.fecha() < this.hoy());
   protected readonly minutosAhora = computed(() => aMinutos(this.horaAhora()));
   /** Hasta qué minuto del día la grilla está en el pasado */
   protected readonly minutosPasados = computed(() => (this.esPasado() ? FIN_DIA : this.esHoy() ? Math.min(FIN_DIA, this.minutosAhora()) : 0));
 
   protected readonly laboratorios = computed(() => this.catalogos.laboratorios());
-  protected readonly columnasGrilla = computed(() => `3.25rem repeat(${this.laboratorios().length}, minmax(8.5rem, 1fr))`);
+  protected readonly columnasGrilla = computed(() => `3.5rem repeat(${this.laboratorios().length}, minmax(10rem, 1fr))`);
 
   protected readonly tituloDia = computed(() => {
     const f = deIso(this.fecha());
@@ -419,6 +433,8 @@ export class PanelDiaComponent implements OnDestroy {
   protected claseDia(d: DiaMes): string {
     if (!d.delMes) return 'invisible';
     if (d.fecha === this.fecha()) return 'bg-marca-600 font-semibold text-white';
+    if (this.catalogos.conjuntoFeriados().has(d.fecha)) return 'bg-red-50 font-medium text-red-400 line-through hover:bg-red-100';
+    if (diaIso(d.fecha) === 7) return 'text-slate-300 hover:bg-slate-100';
     if (d.fecha === this.hoy()) return 'font-semibold text-marca-700 ring-1 ring-marca-300 ring-inset hover:bg-marca-50';
     return (d.fecha < this.hoy() ? 'text-slate-400' : 'text-slate-700') + ' hover:bg-slate-100';
   }
@@ -498,7 +514,7 @@ export class PanelDiaComponent implements OnDestroy {
   // ------------------------------------------------------------------
 
   protected puedeSeleccionar(a: Ambiente): boolean {
-    return this.auth.puedeEditar() && a.estado === 'activo' && !this.esPasado();
+    return this.auth.puedeEditar() && a.estado === 'activo' && !this.esPasado() && !this.noLaborable();
   }
 
   /** ¿La selección en curso pisa una clase? (se marca distinto: irá como evento) */

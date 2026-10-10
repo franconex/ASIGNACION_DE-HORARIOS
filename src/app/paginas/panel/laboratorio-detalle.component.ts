@@ -84,12 +84,15 @@ import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
             </div>
           </div>
           <div class="overflow-x-auto rounded-xl border border-slate-200">
-            <table class="w-full min-w-[640px] table-fixed text-xs">
+            <table class="w-full min-w-[760px] table-fixed text-sm">
               <thead class="bg-slate-50 text-slate-500">
                 <tr>
                   <th class="w-20 px-2 py-1.5 text-left font-semibold">Bloque</th>
                   @for (d of diasSemana(); track d) {
-                    <th class="px-1 py-1.5 font-semibold" [class.text-marca-600]="d === hoy">{{ diasCortos[diaIso(d)] }} {{ fechaCorta(d) }}</th>
+                    <th class="px-1 py-1.5 font-semibold" [class.text-marca-600]="d === hoy" [title]="catalogos.mapaFeriados().get(d) ?? ''">
+                      {{ diasCortos[diaIso(d)] }} {{ fechaCorta(d) }}
+                      @if (catalogos.conjuntoFeriados().has(d)) { <span class="block text-xs font-medium text-red-600">Feriado</span> }
+                    </th>
                   }
                 </tr>
               </thead>
@@ -98,24 +101,26 @@ import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
                   <tr class="border-t border-slate-100">
                     <td class="px-2 py-1 align-top">
                       <span class="block font-semibold text-slate-700">{{ b.nombre }}</span>
-                      <span class="text-[10px] text-slate-400">{{ hhmm(b.hora_inicio) }}–{{ hhmm(b.hora_fin) }}</span>
+                      <span class="text-xs text-slate-500">{{ hhmm(b.hora_inicio) }}–{{ hhmm(b.hora_fin) }}</span>
                     </td>
                     @for (d of diasSemana(); track d) {
-                      <td class="p-0.5 align-top">
+                      <td class="p-0.5 align-top" [class.bg-red-50/40]="catalogos.conjuntoFeriados().has(d)">
                         @for (o of ocupacionesEn(d, b); track o.clave) {
                           <button class="mb-0.5 block w-full rounded border-l-[3px] px-1 py-0.5 text-left leading-tight hover:brightness-95"
                                   [style.border-left-color]="o.color" [style.background]="o.color + '1f'" (click)="seleccionada.set(o)"
                                   [title]="o.titulo + ' · ' + o.detalle">
                             <span class="block truncate font-semibold">{{ o.titulo }}</span>
-                            <span class="block truncate text-[10px] text-slate-500">{{ hhmm(o.hora_inicio) }}–{{ hhmm(o.hora_fin) }}</span>
+                            <span class="block truncate text-xs text-slate-500">{{ hhmm(o.hora_inicio) }}–{{ hhmm(o.hora_fin) }}</span>
                           </button>
                         } @empty {
-                          @if (auth.puedeEditar() && d >= hoy) {
-                            <button class="block h-8 w-full rounded text-[10px] text-emerald-600 hover:bg-emerald-50"
+                          @if (catalogos.conjuntoFeriados().has(d)) {
+                            <span class="block py-2 text-center text-xs text-red-400">Feriado</span>
+                          } @else if (auth.puedeEditar() && d >= hoy) {
+                            <button class="block h-8 w-full rounded text-xs text-emerald-600 hover:bg-emerald-50"
                                     (click)="porRegistrar.set({ fecha: d, bloque: b })"
                                     title="Libre: clic para asignar una clase o registrar un evento">Libre</button>
                           } @else {
-                            <span class="block py-2 text-center text-[10px] text-emerald-600">Libre</span>
+                            <span class="block py-2 text-center text-xs text-emerald-600">Libre</span>
                           }
                         }
                       </td>

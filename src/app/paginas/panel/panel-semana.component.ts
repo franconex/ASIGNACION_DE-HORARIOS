@@ -54,15 +54,15 @@ import { PanelesService } from '../../core/paneles.service';
 
     <!-- Horario -->
     <div class="tarjeta overflow-x-auto">
-      <table class="w-full min-w-[720px] table-fixed border-collapse">
+      <table class="w-full min-w-[860px] table-fixed border-collapse">
         <thead>
           <tr>
             <th class="w-24 border-b border-slate-200 bg-slate-50 px-2 py-2 text-left text-xs font-semibold text-slate-500">Bloque</th>
             @for (d of dias(); track d) {
-              <th class="border-b border-l border-slate-200 px-1 py-2 text-xs font-semibold"
+              <th class="border-b border-l border-slate-200 px-1 py-2 text-sm font-semibold"
                   [class]="d === hoy ? 'bg-marca-50 text-marca-700' : 'bg-slate-50 text-slate-500'">
                 {{ diasCortos[diaIso(d)] }} {{ fechaCorta(d) }}
-                @if (esFeriado(d)) { <span class="mt-0.5 block text-[10px] font-normal text-orange-600">Feriado</span> }
+                @if (catalogos.mapaFeriados().get(d); as feriado) { <span class="mt-0.5 block truncate text-xs font-medium text-red-600" [title]="feriado">Feriado · {{ feriado }}</span> }
               </th>
             }
           </tr>
@@ -71,18 +71,18 @@ import { PanelesService } from '../../core/paneles.service';
           @for (b of bloques(); track b.id) {
             <tr>
               <td class="border-b border-slate-100 px-2 py-1.5 align-top">
-                <span class="block text-xs font-semibold text-slate-700">{{ b.nombre }}</span>
-                <span class="text-[10px] text-slate-400 tabular-nums">{{ hhmm(b.hora_inicio) }}–{{ hhmm(b.hora_fin) }}</span>
+                <span class="block text-sm font-semibold text-slate-700">{{ b.nombre }}</span>
+                <span class="text-xs text-slate-500 tabular-nums">{{ hhmm(b.hora_inicio) }}–{{ hhmm(b.hora_fin) }}</span>
               </td>
               @for (d of dias(); track d) {
-                <td class="border-b border-l border-slate-100 p-1 align-top" [class.bg-marca-50/30]="d === hoy">
+                <td class="border-b border-l border-slate-100 p-1 align-top" [class.bg-marca-50/30]="d === hoy" [class.bg-red-50/40]="esFeriado(d)">
                   @for (o of ocupacionesEn(d, b); track o.clave) {
                     <button class="mb-1 block w-full overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-left leading-tight transition hover:shadow-sm"
                             [style.border-left-color]="colorOcupacion(o)" [style.background]="colorOcupacion(o) + '1f'" (click)="seleccionada.set(o)"
                             [title]="o.titulo + ' · ' + o.detalle">
-                      <span class="block truncate text-xs font-semibold text-slate-800">{{ o.titulo }}</span>
-                      <span class="block truncate text-[10px] text-slate-500 tabular-nums">{{ hhmm(o.hora_inicio) }}–{{ hhmm(o.hora_fin) }}</span>
-                      @if (textoSecundario(o); as t) { <span class="block truncate text-[10px] text-slate-500">{{ t }}</span> }
+                      <span class="block truncate text-sm font-semibold text-slate-800">{{ o.titulo }}</span>
+                      <span class="block truncate text-xs text-slate-500 tabular-nums">{{ hhmm(o.hora_inicio) }}–{{ hhmm(o.hora_fin) }}</span>
+                      @if (textoSecundario(o); as t) { <span class="block truncate text-xs text-slate-500">{{ t }}</span> }
                     </button>
                   } @empty {
                     @if (puedeAsignar(d, b)) {
@@ -91,8 +91,8 @@ import { PanelesService } from '../../core/paneles.service';
                         <app-icono nombre="agregar" [tamano]="16" />
                       </button>
                     } @else {
-                      <span class="flex h-11 items-center justify-center text-[10px]" [class]="esPasada(d, b) ? 'text-slate-300' : 'text-emerald-600'">
-                        {{ esPasada(d, b) ? '—' : 'Libre' }}
+                      <span class="flex h-11 items-center justify-center text-xs" [class]="esFeriado(d) ? 'text-red-400' : esPasada(d, b) ? 'text-slate-300' : 'text-emerald-600'">
+                        {{ esFeriado(d) ? 'Feriado' : esPasada(d, b) ? '—' : 'Libre' }}
                       </span>
                     }
                   }
@@ -212,7 +212,7 @@ export class PanelSemanaComponent {
   }
 
   protected puedeAsignar(fecha: string, b: BloqueHorario): boolean {
-    return this.auth.puedeEditar() && this.lab()?.estado === 'activo' && !this.esPasada(fecha, b);
+    return this.auth.puedeEditar() && this.lab()?.estado === 'activo' && !this.esPasada(fecha, b) && !this.catalogos.motivoNoLaborable(fecha);
   }
 
   protected asignar(fecha: string, b: BloqueHorario): void {

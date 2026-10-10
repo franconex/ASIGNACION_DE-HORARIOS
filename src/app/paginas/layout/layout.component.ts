@@ -8,6 +8,17 @@ import { CatalogosService } from '../../core/catalogos.service';
 import { PanelesService } from '../../core/paneles.service';
 import { environment } from '../../../environments/environment';
 
+/** Dónde se recuerda si el menú lateral está achicado */
+const CLAVE_MENU = 'laboratorios-menu-colapsado';
+
+function leerColapsado(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_MENU) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** Elemento del menú lateral */
 interface ItemMenu {
   ruta: string;
@@ -30,41 +41,50 @@ interface ItemMenu {
         <div class="fixed inset-0 z-30 bg-black/40 lg:hidden" (click)="menuAbierto.set(false)"></div>
       }
 
-      <!-- Menú lateral -->
-      <aside class="fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-marca-900 text-white/75 transition-transform lg:static lg:translate-x-0"
-             [class.-translate-x-full]="!menuAbierto()">
-        <div class="flex items-center gap-3 px-5 py-5">
-          <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white"><app-icono nombre="laboratorio" [tamano]="22" /></div>
-          <div>
+      <!-- Menú lateral: en pantalla grande se puede achicar a solo íconos -->
+      <aside class="fixed inset-y-0 left-0 z-30 flex w-60 flex-col bg-marca-900 text-white/75 transition-[transform,width] duration-200 lg:static lg:translate-x-0"
+             [class.-translate-x-full]="!menuAbierto()" [class.lg:w-16]="colapsado()">
+        <div class="flex items-center gap-3 px-5 py-5" [class.lg:flex-col]="colapsado()" [class.lg:px-3]="colapsado()">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-white"><app-icono nombre="laboratorio" [tamano]="22" /></div>
+          <div class="min-w-0 flex-1" [class.lg:hidden]="colapsado()">
             <p class="leading-tight font-bold text-white">Laboratorios</p>
             <p class="text-xs text-white/55">UPDS · Asignación</p>
           </div>
+          <button class="hidden rounded-md p-1.5 hover:bg-white/10 hover:text-white lg:block" (click)="alternarMenu()"
+                  [title]="colapsado() ? 'Mostrar el menú' : 'Ocultar el menú'" [attr.aria-label]="colapsado() ? 'Mostrar el menú' : 'Ocultar el menú'"
+                  [attr.aria-expanded]="!colapsado()">
+            <app-icono [nombre]="colapsado() ? 'siguiente' : 'anterior'" [tamano]="18" />
+          </button>
         </div>
 
         @if (auth.puedeEditar()) {
-          <div class="space-y-1.5 px-3 pb-3">
-            <button class="flex w-full items-center gap-3 rounded-md bg-white/15 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/25" (click)="nuevaAsignacion()">
-              <app-icono nombre="agregar" [tamano]="18" /> Nueva asignación
+          <div class="space-y-1.5 px-3 pb-3" [class.lg:px-2]="colapsado()">
+            <button class="flex w-full items-center gap-3 rounded-md bg-white/15 px-3 py-2.5 text-sm font-medium text-white transition hover:bg-white/25"
+                    [class.lg:justify-center]="colapsado()" [class.lg:px-0]="colapsado()" [title]="colapsado() ? 'Nueva asignación' : ''" (click)="nuevaAsignacion()">
+              <app-icono nombre="agregar" [tamano]="18" /> <span [class.lg:hidden]="colapsado()">Nueva asignación</span>
             </button>
-            <button class="flex w-full items-center gap-3 rounded-md border border-white/15 px-3 py-2.5 text-sm transition hover:bg-white/10 hover:text-white" (click)="nuevoEvento()">
-              <app-icono nombre="evento" [tamano]="18" /> Evento o defensa
+            <button class="flex w-full items-center gap-3 rounded-md border border-white/15 px-3 py-2.5 text-sm transition hover:bg-white/10 hover:text-white"
+                    [class.lg:justify-center]="colapsado()" [class.lg:px-0]="colapsado()" [title]="colapsado() ? 'Evento o defensa' : ''" (click)="nuevoEvento()">
+              <app-icono nombre="evento" [tamano]="18" /> <span [class.lg:hidden]="colapsado()">Evento o defensa</span>
             </button>
           </div>
         }
 
-        <nav class="flex-1 space-y-1 px-3">
+        <nav class="flex-1 space-y-1 overflow-y-auto px-3" [class.lg:px-2]="colapsado()">
           @for (item of menu(); track item.ruta) {
             <a [routerLink]="item.ruta" routerLinkActive="!bg-white/15 !text-white" [routerLinkActiveOptions]="{ exact: item.ruta === '/' }"
-               (click)="menuAbierto.set(false)"
-               class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition hover:bg-white/10 hover:text-white">
-              <app-icono [nombre]="item.icono" [tamano]="18" /> {{ item.texto }}
+               (click)="menuAbierto.set(false)" [title]="colapsado() ? item.texto : ''" [attr.aria-label]="item.texto"
+               class="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition hover:bg-white/10 hover:text-white"
+               [class.lg:justify-center]="colapsado()" [class.lg:px-0]="colapsado()">
+              <app-icono [nombre]="item.icono" [tamano]="18" /> <span [class.lg:hidden]="colapsado()">{{ item.texto }}</span>
             </a>
           }
         </nav>
 
-        <div class="flex items-center gap-3 border-t border-white/10 p-4">
-          <div class="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white">{{ iniciales() }}</div>
-          <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-3 border-t border-white/10 p-4" [class.lg:flex-col]="colapsado()" [class.lg:gap-1]="colapsado()" [class.lg:px-2]="colapsado()">
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-white"
+               [title]="(auth.perfil()?.nombre_completo ?? '') + ' · ' + (auth.perfil()?.rol ?? '')">{{ iniciales() }}</div>
+          <div class="min-w-0 flex-1" [class.lg:hidden]="colapsado()">
             <p class="truncate text-sm font-medium text-white">{{ auth.perfil()?.nombre_completo }}</p>
             <p class="text-xs text-white/55 capitalize">{{ auth.perfil()?.rol }}</p>
           </div>
@@ -72,7 +92,7 @@ interface ItemMenu {
                   [title]="tema.modo() === 'oscuro' ? 'Modo claro' : 'Modo oscuro'" [attr.aria-label]="tema.modo() === 'oscuro' ? 'Activar modo claro' : 'Activar modo oscuro'">
             <app-icono [nombre]="tema.modo() === 'oscuro' ? 'sol' : 'luna'" [tamano]="18" />
           </button>
-          <button class="rounded-md p-2 hover:bg-white/10 hover:text-white" (click)="salir()" title="Cerrar sesión"><app-icono nombre="salir" [tamano]="18" /></button>
+          <button class="rounded-md p-2 hover:bg-white/10 hover:text-white" (click)="salir()" title="Cerrar sesión" aria-label="Cerrar sesión"><app-icono nombre="salir" [tamano]="18" /></button>
         </div>
       </aside>
 
@@ -116,6 +136,8 @@ export class LayoutComponent implements OnInit {
   private readonly router = inject(Router);
 
   protected readonly menuAbierto = signal(false);
+  /** Pantalla grande: menú achicado a solo íconos (se recuerda en este navegador) */
+  protected readonly colapsado = signal(leerColapsado());
   protected readonly errorCarga = signal('');
   protected readonly sinConfigurar = environment.supabaseUrl.includes('SU-PROYECTO');
 
@@ -137,6 +159,16 @@ export class LayoutComponent implements OnInit {
 
   ngOnInit(): void {
     if (!this.sinConfigurar) void this.cargar();
+  }
+
+  /** Achica o agranda el menú lateral; el contenido usa el espacio que queda */
+  protected alternarMenu(): void {
+    this.colapsado.update((c) => !c);
+    try {
+      localStorage.setItem(CLAVE_MENU, this.colapsado() ? '1' : '0');
+    } catch {
+      // Sin almacenamiento: solo dura esta sesión
+    }
   }
 
   /** Iniciales del usuario para el avatar */

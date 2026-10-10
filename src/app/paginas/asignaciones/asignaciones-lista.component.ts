@@ -30,8 +30,12 @@ export function agruparHorarios(horarios: AsignacionHorario[]): GrupoHorario[] {
   return [...grupos.values()];
 }
 
+/** Criterios de orden de la lista de asignaciones */
+type OrdenAsignaciones = 'inicio_asc' | 'inicio_desc' | 'recientes' | 'materia' | 'docente' | 'grupo';
+
 /**
- * Lista de asignaciones con filtros por sistema, vigencia, carrera y ambiente.
+ * Lista de asignaciones con filtros por sistema, vigencia, carrera, ambiente
+ * y grupo, y varios órdenes (fecha, materia, docente…).
  */
 @Component({
   selector: 'app-asignaciones-lista',
@@ -58,9 +62,18 @@ export function agruparHorarios(horarios: AsignacionHorario[]): GrupoHorario[] {
         <option [ngValue]="0">Todos los ambientes</option>
         @for (a of catalogos.ambientesActivos(); track a.id) { <option [ngValue]="a.id">{{ a.codigo }}</option> }
       </select>
+      @if (gruposDisponibles().length) {
+        <select class="campo !w-auto" [ngModel]="grupo()" (ngModelChange)="grupo.set($event)" aria-label="Grupo">
+          <option value="">Todos los grupos</option>
+          @for (g of gruposDisponibles(); track g) { <option [value]="g">Grupo {{ g }}</option> }
+        </select>
+      }
+      <select class="campo !w-auto" [ngModel]="orden()" (ngModelChange)="orden.set($event)" aria-label="Ordenar">
+        @for (o of ordenes; track o.valor) { <option [value]="o.valor">{{ o.texto }}</option> }
+      </select>
       <div class="relative min-w-52 flex-1">
         <app-icono nombre="buscar" [tamano]="16" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
-        <input maxlength="60" class="campo !pl-9" placeholder="Materia o docente" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
+        <input maxlength="60" class="campo !pl-9" placeholder="Materia, docente o grupo" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
       </div>
       <button class="btn-secundario" (click)="exportar()" [disabled]="!filtradas().length" title="Exportar a Excel"><app-icono nombre="descargar" [tamano]="16" /> Excel</button>
       @if (auth.puedeEditar()) {
@@ -132,16 +145,42 @@ export class AsignacionesListaComponent {
   protected readonly carreraId = signal(0);
   protected readonly ambienteId = signal(0);
   protected readonly busqueda = signal('');
+  protected readonly grupo = signal('');
+  protected readonly orden = signal<OrdenAsignaciones>('inicio_asc');
+  protected readonly ordenes: { valor: OrdenAsignaciones; texto: string }[] = [
+    { valor: 'inicio_asc', texto: 'Fecha de inicio: más próxima' },
+    { valor: 'inicio_desc', texto: 'Fecha de inicio: más lejana' },
+    { valor: 'recientes', texto: 'Registradas recientemente' },
+    { valor: 'materia', texto: 'Materia (A-Z)' },
+    { valor: 'docente', texto: 'Docente (A-Z)' },
+    { valor: 'grupo', texto: 'Grupo' },
+  ];
   protected readonly asignaciones = signal<Asignacion[]>([]);
+  /** Grupos presentes en lo cargado, para el filtro */
+  protected readonly gruposDisponibles = computed(() =>
+    [...new Set(this.asignaciones().map((a) => a.grupo?.trim()).filter((g): g is string => !!g))]
+      .sort((x, y) => x.localeCompare(y, 'es', { numeric: true })));
   protected readonly cargando = signal(false);
 
   protected readonly filtradas = computed(() => {
     const texto = this.busqueda().trim().toLowerCase();
-    return this.asignaciones().filter((a) =>
+    const lista = this.asignaciones().filter((a) =>
       (!this.sistemaId() || a.sistema_id === this.sistemaId()) &&
       (!this.carreraId() || a.carrera_id === this.carreraId()) &&
       (!this.ambienteId() || (a.horarios ?? []).some((h) => h.ambiente_id === this.ambienteId())) &&
-      (!texto || `${a.materia?.nombre} ${a.docente?.apellidos} ${a.docente?.nombres}`.toLowerCase().includes(texto)));
+      (!this.grupo() || a.grupo?.trim() === this.grupo()) &&
+      (!texto || `${a.materia?.nombre} ${a.docente?.apellidos} ${a.docente?.nombres} ${a.grupo ?? ''}`.toLowerCase().includes(texto)));
+    const texto2 = (x?: string | null) => x ?? '';
+    const docente = (a: Asignacion) => `${texto2(a.docente?.apellidos)} ${texto2(a.docente?.nombres)}`;
+    const comparar: Record<OrdenAsignaciones, (a: Asignacion, b: Asignacion) => number> = {
+      inicio_asc: (a, b) => a.fecha_inicio.localeCompare(b.fecha_inicio),
+      inicio_desc: (a, b) => b.fecha_inicio.localeCompare(a.fecha_inicio),
+      recientes: (a, b) => b.id - a.id,
+      materia: (a, b) => texto2(a.materia?.nombre).localeCompare(texto2(b.materia?.nombre), 'es'),
+      docente: (a, b) => docente(a).localeCompare(docente(b), 'es'),
+      grupo: (a, b) => texto2(a.grupo).localeCompare(texto2(b.grupo), 'es', { numeric: true }),
+    };
+    return [...lista].sort(comparar[this.orden()]);
   });
 
   constructor() {

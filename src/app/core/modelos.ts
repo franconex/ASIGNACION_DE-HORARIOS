@@ -17,6 +17,8 @@ export interface Perfil {
   correo: string;
   rol: Rol;
   activo: boolean;
+  /** Ya confirmó su nombre y creó contraseña (se pide al recibir un rol) */
+  cuenta_completa: boolean;
   /** Turno habitual del auxiliar (solo informativo) */
   turno_habitual?: TurnoCodigo | null;
   /** Participa de la rotación del sábado */

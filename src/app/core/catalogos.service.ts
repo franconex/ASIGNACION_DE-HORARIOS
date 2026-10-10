@@ -2,6 +2,7 @@ import { computed, inject, Injectable, signal } from '@angular/core';
 import {
   Ambiente, AmbientePc, BloqueHorario, Carrera, Docente, Feriado, Materia, SistemaAcademico, TipoReserva,
 } from './modelos';
+import { diaIso } from './fechas';
 import { ErrorSistema, SupabaseService } from './supabase.service';
 
 /** Tablas de catálogo que se guardan en memoria */
@@ -41,6 +42,14 @@ export class CatalogosService {
   readonly mapaMaterias = computed(() => new Map(this.materias().map((m) => [m.id, m])));
   readonly mapaSistemas = computed(() => new Map(this.sistemas().map((s) => [s.id, s])));
   readonly conjuntoFeriados = computed(() => new Set(this.feriados().map((f) => f.fecha)));
+  readonly mapaFeriados = computed(() => new Map(this.feriados().map((f) => [f.fecha, f.descripcion])));
+
+  /** Por qué ese día no se trabaja (feriado o domingo); null si es un día hábil */
+  motivoNoLaborable(fecha: string): string | null {
+    const feriado = this.mapaFeriados().get(fecha);
+    if (feriado !== undefined) return `Feriado: ${feriado}`;
+    return diaIso(fecha) === 7 ? 'Domingo: no hay clases' : null;
+  }
 
   /** Ambientes utilizables (no dados de baja) */
   readonly ambientesActivos = computed(() => this.ambientes().filter((a) => a.estado !== 'baja'));

@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, signal } from '@angular/core';
+import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../core/auth.service';
 import { CatalogosService, TablaCatalogo } from '../core/catalogos.service';
@@ -52,7 +52,14 @@ export interface ColumnaCrud {
       <table class="tabla">
         <thead>
           <tr>
-            @for (c of columnas(); track c.clave) { <th>{{ c.etiqueta }}</th> }
+            @for (c of columnas(); track c.clave) {
+              <th [attr.aria-sort]="orden()?.clave === c.clave ? (orden()!.asc ? 'ascending' : 'descending') : null">
+                <button type="button" class="inline-flex items-center gap-1 hover:text-slate-800" (click)="ordenarPor(c.clave)" [title]="'Ordenar por ' + c.etiqueta">
+                  {{ c.etiqueta }}
+                  @if (orden()?.clave === c.clave) { <app-icono [nombre]="orden()!.asc ? 'arriba' : 'abajo'" [tamano]="13" /> }
+                </button>
+              </th>
+            }
             <th class="w-32"></th>
           </tr>
         </thead>
@@ -133,30 +140,55 @@ export class CrudTablaComponent {
   readonly columnas = input.required<ColumnaCrud[]>();
   readonly clavePrimaria = input('id');
   readonly valoresNuevos = input<Record<string, unknown>>({});
+  /** true = el catálogo usa su propio modal: la tabla solo avisa que se pidió crear o editar */
+  readonly editorPropio = input(false);
+  readonly pedirNuevo = output<void>();
+  readonly pedirEditar = output<Record<string, unknown>>();
 
   protected readonly busqueda = signal('');
   protected readonly formulario = signal<Record<string, unknown> | null>(null);
   protected readonly editando = signal(false);
   protected readonly guardando = signal(false);
 
-  /** Filas que contienen el texto buscado en alguna columna */
+  /** Columna por la que se ordena (null = el orden en que llegan) */
+  protected readonly orden = signal<{ clave: string; asc: boolean } | null>(null);
+
+  /** Filas que contienen el texto buscado en alguna columna, en el orden elegido */
   protected readonly filtradas = computed(() => {
     const texto = this.busqueda().trim().toLowerCase();
     const filas = this.filas() as Record<string, unknown>[];
-    if (!texto) return filas;
-    return filas.filter((f) => this.columnas().some((c) => this.texto(f, c).toLowerCase().includes(texto)));
+    const lista = texto ? filas.filter((f) => this.columnas().some((c) => this.texto(f, c).toLowerCase().includes(texto))) : filas;
+    const orden = this.orden();
+    if (!orden) return lista;
+    const signo = orden.asc ? 1 : -1;
+    return [...lista].sort((a, b) => {
+      const x = a[orden.clave];
+      const y = b[orden.clave];
+      if (typeof x === 'number' && typeof y === 'number') return (x - y) * signo;
+      return String(x ?? '').localeCompare(String(y ?? ''), 'es', { numeric: true }) * signo;
+    });
   });
+
+  /** Primer clic: ascendente; segundo: descendente; tercero: sin orden */
+  protected ordenarPor(clave: string): void {
+    const actual = this.orden();
+    if (actual?.clave !== clave) this.orden.set({ clave, asc: true });
+    else if (actual.asc) this.orden.set({ clave, asc: false });
+    else this.orden.set(null);
+  }
 
   protected texto(fila: Record<string, unknown>, columna: ColumnaCrud): string {
     return columna.formato ? columna.formato(fila) : String(fila[columna.clave] ?? '');
   }
 
   protected nuevo(): void {
+    if (this.editorPropio()) return this.pedirNuevo.emit();
     this.editando.set(false);
     this.formulario.set({ ...this.valoresNuevos() });
   }
 
   protected editar(fila: Record<string, unknown>): void {
+    if (this.editorPropio()) return this.pedirEditar.emit(fila);
     this.editando.set(true);
     this.formulario.set({ ...fila });
   }

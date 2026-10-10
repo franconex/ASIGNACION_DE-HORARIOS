@@ -1,19 +1,28 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CampoCrud, ColumnaCrud, CrudTablaComponent } from '../../compartido/crud-tabla.component';
+import { FormMateria, materiaAFormulario, MateriaFormComponent, materiaNueva } from '../../compartido/materia-form.component';
+import { Materia } from '../../core/modelos';
 import { CatalogosService } from '../../core/catalogos.service';
 
 /** Catálogo general de materias */
 @Component({
   selector: 'app-materias',
-  imports: [CrudTablaComponent],
+  imports: [CrudTablaComponent, MateriaFormComponent],
   template: `
     <app-crud-tabla titulo="Materias" descripcion="Catálogo general de materias. La carrera se indica en cada asignación."
                     tabla="materias" [filas]="catalogos.materias()" [campos]="campos" [columnas]="columnas"
-                    [valoresNuevos]="{ requiere_laboratorio: true, activo: true }" />
+                    [editorPropio]="true" (pedirNuevo)="form.set(nueva())" (pedirEditar)="form.set(aFormulario($event))" />
+    <app-materia-form [datos]="form()" (cerrar)="form.set(null)" (guardado)="form.set(null)" />
   `,
 })
 export class MateriasComponent {
   protected readonly catalogos = inject(CatalogosService);
+  /** Materia abierta en el modal (null = cerrado); el modal es el mismo del alta rápida */
+  protected readonly form = signal<FormMateria | null>(null);
+  protected readonly nueva = () => materiaNueva();
+  protected aFormulario(fila: Record<string, unknown>): FormMateria {
+    return materiaAFormulario(fila as unknown as Materia);
+  }
 
   protected readonly campos: CampoCrud[] = [
     { clave: 'nombre', etiqueta: 'Nombre', tipo: 'texto', requerido: true, completo: true },

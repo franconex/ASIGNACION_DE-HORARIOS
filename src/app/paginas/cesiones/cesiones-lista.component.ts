@@ -26,6 +26,12 @@ export const SELECT_CESION =
         <option [ngValue]="true">Vigentes (desde hoy)</option>
         <option [ngValue]="false">Todas</option>
       </select>
+      <select class="campo !w-auto" [ngModel]="orden()" (ngModelChange)="orden.set($event)" aria-label="Ordenar">
+        <option value="proxima">Fecha más próxima</option>
+        <option value="lejana">Fecha más lejana</option>
+        <option value="recientes">Registradas recientemente</option>
+        <option value="docente">Docente que cede (A-Z)</option>
+      </select>
       <div class="relative min-w-52 flex-1">
         <app-icono nombre="buscar" [tamano]="16" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
         <input maxlength="60" class="campo !pl-9" placeholder="Docente, materia, motivo…" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
@@ -99,16 +105,26 @@ export class CesionesListaComponent {
   protected readonly cargando = signal(false);
   protected readonly soloVigentes = signal(true);
   protected readonly busqueda = signal('');
+  protected readonly orden = signal<'proxima' | 'lejana' | 'recientes' | 'docente'>('proxima');
 
   protected readonly filtradas = computed(() => {
     const texto = this.busqueda().trim().toLowerCase();
-    return this.cesiones().filter((c) => {
+    const lista = this.cesiones().filter((c) => {
       if (this.soloVigentes() && !(c.fechas ?? []).some((f) => f.fecha >= this.hoy)) return false;
       if (!texto) return true;
       const a = c.horario?.asignacion;
       return `${a?.docente?.apellidos} ${a?.docente?.nombres} ${a?.materia?.nombre} ${c.receptor?.apellidos} ${c.receptor?.nombres} ${c.materia_receptor} ${c.motivo}`
         .toLowerCase().includes(texto);
     });
+    // Primera fecha que interesa: la próxima (o la última si ya pasaron todas)
+    const fechaClave = (c: Cesion) => { const f = this.fechasOrdenadas(c); return f.find((x) => x >= this.hoy) ?? f.at(-1) ?? ''; };
+    const docente = (c: Cesion) => `${c.horario?.asignacion?.docente?.apellidos ?? ''} ${c.horario?.asignacion?.docente?.nombres ?? ''}`;
+    switch (this.orden()) {
+      case 'proxima': return lista.sort((a, b) => fechaClave(a).localeCompare(fechaClave(b)));
+      case 'lejana': return lista.sort((a, b) => fechaClave(b).localeCompare(fechaClave(a)));
+      case 'docente': return lista.sort((a, b) => docente(a).localeCompare(docente(b), 'es'));
+      default: return lista.sort((a, b) => b.id - a.id);
+    }
   });
 
   constructor() {

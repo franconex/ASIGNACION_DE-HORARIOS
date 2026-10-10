@@ -23,6 +23,8 @@ export class AuthService {
   readonly esDecano = computed(() => this.perfil()?.rol === 'decano');
   /** Entró pero aún no tiene rol: solo ve la pantalla de espera */
   readonly esInvitado = computed(() => this.perfil()?.rol === 'invitado');
+  /** Ya tiene rol pero falta que confirme su nombre y cree su contraseña */
+  readonly debeCompletarCuenta = computed(() => !!this.perfil() && !this.esInvitado() && !this.perfil()!.cuenta_completa);
 
   /** Edición ACADÉMICA (horarios de clase, cesiones, eventos, catálogos): admin, decano, encargado */
   readonly puedeEditar = computed(() => ['admin', 'decano', 'encargado'].includes(this.perfil()?.rol ?? ''));
@@ -87,6 +89,19 @@ export class AuthService {
       await this.cerrarSesion();
       throw new Error('Su usuario no está activo. Solicite al administrador que lo habilite.');
     }
+  }
+
+  /** Crea la contraseña (para entrar también con correo) y guarda el nombre */
+  async completarCuenta(nombre: string, password: string): Promise<void> {
+    const { error } = await this.supabase.cliente.auth.updateUser({ password });
+    if (error) {
+      throw new Error(error.code === 'weak_password' ? 'La contraseña es muy débil. Use al menos 8 caracteres con letras y números.'
+        : error.code === 'reauthentication_needed' ? 'Por seguridad, cierre sesión y vuelva a entrar antes de crear la contraseña.'
+        : error.message);
+    }
+    const { error: errorPerfil } = await this.supabase.cliente.rpc('rpc_completar_cuenta', { p_nombre: nombre });
+    if (errorPerfil) throw new Error(errorPerfil.message);
+    await this.recargarPerfil();
   }
 
   /** Cierra la sesión */

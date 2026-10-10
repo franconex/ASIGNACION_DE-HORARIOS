@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { exigirGestionAuxiliares, exigirInvitado, exigirOperacion, exigirSesion, soloSinSesion } from './core/guards';
+import { exigirCuentaPendiente, exigirGestionAuxiliares, exigirInvitado, exigirOperacion, exigirSesion, soloSinSesion } from './core/guards';
 
 /**
  * Rutas del sistema: 3 pantallas. Asignar, ceder y eventos se hacen desde
@@ -16,6 +16,12 @@ export const routes: Routes = [
     title: 'Esperando rol',
     canActivate: [exigirInvitado],
     loadComponent: () => import('./paginas/login/espera.component').then((m) => m.EsperaComponent),
+  },
+  {
+    path: 'completar-cuenta',
+    title: 'Completar cuenta',
+    canActivate: [exigirCuentaPendiente],
+    loadComponent: () => import('./paginas/login/completar-cuenta.component').then((m) => m.CompletarCuentaComponent),
   },
   {
     path: '',

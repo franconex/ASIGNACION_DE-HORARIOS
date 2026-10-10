@@ -1,6 +1,7 @@
-import { Component, computed, effect, input, model, signal, untracked } from '@angular/core';
+import { Component, computed, effect, inject, input, model, signal, untracked } from '@angular/core';
 import { environment } from '../../environments/environment';
-import { aIso, DIAS_CORTOS, deIso, diaIso, fechaActual, MESES, rangoFechas, sumarDias } from '../core/fechas';
+import { CatalogosService } from '../core/catalogos.service';
+import { aIso, DIAS_CORTOS, deIso, diaIso, fechaActual, fechaCorta, MESES, rangoFechas, sumarDias } from '../core/fechas';
 import { IconoComponent } from './icono.component';
 
 /** Celda de un mes */
@@ -11,6 +12,7 @@ interface CeldaDia {
   habilitado: boolean;
   seleccionado: boolean;
   feriado: boolean;
+  domingo: boolean;
 }
 
 /** Un mes visible */
@@ -26,6 +28,7 @@ interface MesVisible {
  * UNA o VARIAS fechas con clic.
  * - Nunca permite fechas pasadas (salvo que se indique lo contrario).
  * - Limita por días de la semana, feriados o una lista exacta de fechas.
+ * - Los domingos y los feriados del catálogo nunca se pueden marcar.
  * - "Marcar todos los…" selecciona ese día de la semana en todo lo visible.
  * Las fechas pasadas que ya estaban guardadas se muestran, pero no se pueden quitar.
  */
@@ -86,6 +89,14 @@ interface MesVisible {
           </div>
         }
       </div>
+      <!-- Leyenda de días bloqueados -->
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+        <span class="flex items-center gap-1.5"><span class="h-3 w-3 rounded-sm bg-red-100 ring-1 ring-red-300"></span> Feriado</span>
+        <span>Domingos sin clases</span>
+        @for (f of feriadosVisibles(); track f.fecha) {
+          <span class="text-red-700"><b>{{ fechaCorta(f.fecha) }}</b> {{ f.descripcion }}</span>
+        }
+      </div>
     </div>
   `,
 })
@@ -110,8 +121,13 @@ export class SelectorFechasComponent {
   readonly resaltadas = input<Set<string>>(new Set());
   /** Explicación de los días resaltados (tooltip) */
   readonly textoResaltada = input('');
+  /** Fecha cuyo mes se muestra al abrir si no hay nada marcado (ej. el día elegido en el calendario) */
+  readonly fechaInicial = input<string | null>(null);
+
+  private readonly catalogos = inject(CatalogosService);
 
   protected readonly cortos = DIAS_CORTOS;
+  protected readonly fechaCorta = fechaCorta;
   protected readonly nombresDia = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábados', 'domingos'];
   /** Hoy en la zona horaria de la universidad */
   protected readonly hoy = fechaActual(environment.zonaHoraria);
@@ -127,6 +143,20 @@ export class SelectorFechasComponent {
         const futuras = [...(permitidas ?? [])].filter((f) => this.permitirPasado() || f >= this.hoy).sort();
         const inicio = futuras[0] ?? this.hoy;
         this.mesInicial.set(inicio.slice(0, 8) + '01');
+      });
+    });
+    // Al abrir (o si cambian las fechas desde afuera) muestra el mes de lo marcado,
+    // no el mes actual; sin nada marcado, el mes de la fecha inicial
+    effect(() => {
+      const marcadas = this.valor();
+      const inicial = this.fechaInicial();
+      untracked(() => {
+        const desde = this.mesInicial();
+        const hasta = this.mesDesplazado(desde, this.cantidadMeses());
+        if (marcadas.some((f) => f >= desde && f < hasta)) return;
+        const ordenadas = [...marcadas].sort();
+        const destino = ordenadas.find((f) => f >= this.hoy) ?? ordenadas[0] ?? inicial;
+        if (destino && (this.permitirPasado() || destino >= this.hoy.slice(0, 8) + '01')) this.mesInicial.set(destino.slice(0, 8) + '01');
       });
     });
   }
@@ -163,7 +193,8 @@ export class SelectorFechasComponent {
         delMes: deIso(fecha).getMonth() === fechaPrimero.getMonth(),
         habilitado: this.habilitada(fecha) && deIso(fecha).getMonth() === fechaPrimero.getMonth(),
         seleccionado: seleccion.has(fecha) && deIso(fecha).getMonth() === fechaPrimero.getMonth(),
-        feriado: this.feriados().has(fecha),
+        feriado: this.esFeriado(fecha),
+        domingo: diaIso(fecha) === 7,
       }));
       if (celdas.slice(35).every((c) => !c.delMes)) celdas = celdas.slice(0, 35);
       return {
@@ -181,13 +212,19 @@ export class SelectorFechasComponent {
     return meses.length === 1 ? meses[0].titulo : `${meses[0].titulo} a ${meses.at(-1)!.titulo}`;
   });
 
+  /** Feriados de los meses visibles, para nombrarlos en la leyenda */
+  protected readonly feriadosVisibles = computed(() => {
+    const fechas = new Set(this.mesesVisibles().flatMap((m) => m.celdas).filter((c) => c.delMes && c.feriado).map((c) => c.fecha));
+    return [...fechas].sort().map((fecha) => ({ fecha, descripcion: this.catalogos.mapaFeriados().get(fecha) ?? 'Feriado' }));
+  });
+
   /** No se navega a meses completamente pasados */
   protected readonly puedeRetroceder = computed(() => this.permitirPasado() || this.mesInicial() > this.hoy.slice(0, 8) + '01');
 
   /** Días de la semana que tienen atajo */
   protected readonly diasAtajo = computed(() => {
     const dias = this.diasPermitidos();
-    const base = dias.length ? dias : [1, 2, 3, 4, 5, 6];
+    const base = (dias.length ? dias : [1, 2, 3, 4, 5, 6]).filter((d) => d !== 7);
     const permitidas = this.fechasPermitidas();
     return permitidas ? base.filter((d) => [...permitidas].some((f) => diaIso(f) === d)) : base;
   });
@@ -198,11 +235,13 @@ export class SelectorFechasComponent {
     if (c.seleccionado && c.habilitado) return 'bg-marca-600 font-semibold text-white hover:bg-marca-700 dark:hover:bg-marca-500';
     if (c.seleccionado) return 'bg-marca-100 font-medium text-marca-700';
     if (c.habilitado) return 'text-slate-700 hover:bg-marca-50';
-    return c.feriado ? 'text-slate-300 line-through' : 'text-slate-300';
+    if (c.feriado) return 'cursor-not-allowed bg-red-50 font-medium text-red-400 line-through';
+    return c.domingo ? 'cursor-not-allowed text-slate-300' : 'text-slate-300';
   }
 
   protected tituloCelda(c: CeldaDia): string {
-    if (c.feriado) return 'Feriado';
+    const motivo = this.catalogos.motivoNoLaborable(c.fecha) ?? (c.feriado ? 'Feriado' : null);
+    if (motivo) return motivo;
     if (c.seleccionado && this.resaltadas().has(c.fecha)) return this.textoResaltada();
     if (c.seleccionado && !c.habilitado) return 'Fecha pasada (no se puede cambiar)';
     if (!c.habilitado && c.fecha < this.hoy) return 'Fecha pasada';
@@ -212,13 +251,18 @@ export class SelectorFechasComponent {
   /** ¿Se puede elegir esta fecha? */
   habilitada(fecha: string): boolean {
     if (!this.permitirPasado() && fecha < this.hoy) return false;
+    if (diaIso(fecha) === 7 || this.esFeriado(fecha)) return false;
     const max = this.max();
     if (max && fecha > max) return false;
     const permitidas = this.fechasPermitidas();
     if (permitidas) return permitidas.has(fecha);
     const dias = this.diasPermitidos();
-    if (dias.length && !dias.includes(diaIso(fecha))) return false;
-    return !this.feriados().has(fecha);
+    return !dias.length || dias.includes(diaIso(fecha));
+  }
+
+  /** Feriado del catálogo (o de los indicados por el formulario) */
+  private esFeriado(fecha: string): boolean {
+    return this.catalogos.conjuntoFeriados().has(fecha) || this.feriados().has(fecha);
   }
 
   /** Marca / desmarca una fecha */

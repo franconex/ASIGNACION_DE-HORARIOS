@@ -2,6 +2,8 @@ import { Component, computed, inject, input, OnInit, signal } from '@angular/cor
 import { FormsModule } from '@angular/forms';
 import { BuscadorComponent, normalizar, OpcionBuscador } from '../../compartido/buscador.component';
 import { IconoComponent } from '../../compartido/icono.component';
+import { DocenteFormComponent, docenteNuevo, FormDocente } from '../../compartido/docente-form.component';
+import { FormMateria, MateriaFormComponent, materiaNueva } from '../../compartido/materia-form.component';
 import { SelectorFechasComponent } from '../../compartido/selector-fechas.component';
 import { CatalogosService } from '../../core/catalogos.service';
 import {
@@ -59,7 +61,7 @@ let contadorFilas = 0;
  */
 @Component({
   selector: 'app-asignacion-form',
-  imports: [FormsModule, BuscadorComponent, SelectorFechasComponent, IconoComponent],
+  imports: [FormsModule, BuscadorComponent, SelectorFechasComponent, IconoComponent, DocenteFormComponent, MateriaFormComponent],
   template: `
     <div class="flex h-full flex-col">
       <!-- Encabezado -->
@@ -95,7 +97,7 @@ let contadorFilas = 0;
 
           @if (sistema(); as s) {
             @if (s.modo_fechas === 'dias') {
-              <app-selector-fechas [valor]="fechasMarcadas()" (valorChange)="cambiarFechas($event)"
+              <app-selector-fechas [valor]="fechasMarcadas()" (valorChange)="cambiarFechas($event)" [fechaInicial]="prellenado()?.fecha ?? null"
                                    [diasPermitidos]="s.dias_permitidos" [feriados]="catalogos.conjuntoFeriados()"
                                    [resaltadas]="fechasOcupadas()" textoResaltada="Ese día el laboratorio está ocupado: la clase va a otro laboratorio o aula">
                 @if (primerDiaFuturo() && s.dias_sugeridos) {
@@ -157,14 +159,24 @@ let contadorFilas = 0;
               </select>
             </div>
             <div>
-              <label class="etiqueta">Docente *</label>
+              <div class="flex items-end justify-between gap-2">
+                <label class="etiqueta">Docente *</label>
+                <button type="button" class="mb-1 inline-flex items-center gap-0.5 text-xs font-medium text-marca-700 hover:underline" (click)="abrirNuevoDocente('')">
+                  <app-icono nombre="agregar" [tamano]="13" /> Nuevo docente
+                </button>
+              </div>
               <app-buscador [opciones]="opcionesDocentes()" [valor]="docenteId()" (valorChange)="docenteId.set($event); programarVerificacion()"
-                            placeholder="Buscar por apellido o nombre" />
+                            placeholder="Buscar por apellido o nombre" [permitirCrear]="true" (crear)="abrirNuevoDocente($event)" />
             </div>
             <div>
-              <label class="etiqueta">Materia * <span class="font-normal normal-case text-slate-400">(★ = ya la dicta)</span></label>
+              <div class="flex items-end justify-between gap-2">
+                <label class="etiqueta">Materia * <span class="font-normal normal-case text-slate-400">(★ = ya la dicta)</span></label>
+                <button type="button" class="mb-1 inline-flex items-center gap-0.5 text-xs font-medium text-marca-700 hover:underline" (click)="abrirNuevaMateria('')">
+                  <app-icono nombre="agregar" [tamano]="13" /> Nueva materia
+                </button>
+              </div>
               <app-buscador [opciones]="opcionesMaterias()" [valor]="materiaId()" (valorChange)="materiaId.set($event)"
-                            placeholder="Buscar materia" [permitirCrear]="true" (crear)="crearMateria($event)" />
+                            placeholder="Buscar materia" [permitirCrear]="true" (crear)="abrirNuevaMateria($event)" />
             </div>
             <div class="grid grid-cols-3 gap-3">
               @if (usaGrupo()) {
@@ -325,6 +337,10 @@ let contadorFilas = 0;
         </div>
       </footer>
     </div>
+
+    <!-- Alta rápida: los mismos modales de Configuración -->
+    <app-docente-form [datos]="nuevoDocente()" (cerrar)="nuevoDocente.set(null)" (guardado)="docenteAgregado($event)" />
+    <app-materia-form [datos]="nuevaMateria()" (cerrar)="nuevaMateria.set(null)" (guardado)="materiaAgregada($event)" />
   `,
 })
 export class AsignacionFormComponent implements OnInit {
@@ -404,10 +420,10 @@ export class AsignacionFormComponent implements OnInit {
   protected readonly fechasBase = computed(() => {
     const s = this.sistema();
     if (!s) return [];
-    const feriados = this.catalogos.conjuntoFeriados();
-    if (s.modo_fechas === 'dias') return this.fechasMarcadas().filter((f) => !feriados.has(f));
+    const habil = (f: string) => !this.catalogos.motivoNoLaborable(f);
+    if (s.modo_fechas === 'dias') return this.fechasMarcadas().filter(habil);
     if (!this.fechaInicio() || !this.fechaFin() || this.errorRango()) return [];
-    return rangoFechas(this.fechaInicio(), this.fechaFin()).filter((f) => s.dias_permitidos.includes(diaIso(f)) && !feriados.has(f));
+    return rangoFechas(this.fechaInicio(), this.fechaFin()).filter((f) => s.dias_permitidos.includes(diaIso(f)) && habil(f));
   });
 
   /** Días de la semana que se pueden elegir en los horarios */
@@ -470,7 +486,11 @@ export class AsignacionFormComponent implements OnInit {
     }
     // Nueva: modular presencial por defecto y prellenado desde panel/calendario
     const p = this.prellenado() ?? {};
-    const porDefecto = this.catalogos.sistemas().find((s) => s.codigo === 'MOD_PRES') ?? this.catalogos.sistemas()[0];
+    const presencial = this.catalogos.sistemas().find((s) => s.codigo === 'MOD_PRES') ?? this.catalogos.sistemas()[0];
+    // Según el día elegido: sábado -> semipresencial, lunes a viernes -> presencial
+    const diaElegido = p.fecha ? diaIso(p.fecha) : p.dia ?? null;
+    const segunDia = diaElegido ? this.sistemaParaDia(diaElegido) : undefined;
+    const porDefecto = segunDia ?? presencial;
     const fila = this.nuevaFila();
     if (p.horaInicio && p.horaFin) {
       fila.horaInicio = p.horaInicio;
@@ -538,22 +558,33 @@ export class AsignacionFormComponent implements OnInit {
   // Sistema y fechas
   // ------------------------------------------------------------------
 
+  /** Sistema modular que se dicta ese día de la semana (el más específico: sábado -> semipresencial) */
+  private sistemaParaDia(dia: number): SistemaAcademico | undefined {
+    return this.catalogos.sistemas()
+      .filter((s) => s.modo_fechas === 'dias' && s.dias_permitidos.includes(dia))
+      .sort((a, b) => a.dias_permitidos.length - b.dias_permitidos.length)[0];
+  }
+
   protected cambiarSistema(s: SistemaAcademico): void {
+    const antes = this.diasDisponibles();
     this.sistemaId.set(s.id);
     if (s.modo_fechas === 'dias') {
       // Conserva solo los días que el nuevo sistema permite
       this.fechasMarcadas.update((f) => f.filter((x) => s.dias_permitidos.includes(diaIso(x))));
     } else if (!this.fechaInicio()) {
-      this.cambiarInicio(this.hoy, s);
+      // Empieza el día elegido en el calendario (si no es pasado); si no, hoy
+      const elegida = this.prellenado()?.fecha;
+      this.cambiarInicio(elegida && elegida >= this.hoy ? elegida : this.hoy, s);
     }
-    this.ajustarDiasDeFilas();
+    this.ajustarDiasDeFilas(antes);
     this.programarVerificacion();
   }
 
   /** Al marcar días: los horarios toman los días de la semana presentes */
   protected cambiarFechas(fechas: string[]): void {
+    const antes = this.diasDisponibles();
     this.fechasMarcadas.set(fechas);
-    this.ajustarDiasDeFilas();
+    this.ajustarDiasDeFilas(antes);
     this.programarVerificacion();
   }
 
@@ -566,22 +597,26 @@ export class AsignacionFormComponent implements OnInit {
 
   /** Marca N días permitidos a partir del primer día marcado que no pasó (los pasados se conservan) */
   protected completarDias(s: SistemaAcademico): void {
-    const feriados = this.catalogos.conjuntoFeriados();
     const pasados = this.fechasMarcadas().filter((f) => f < this.hoy);
     const resultado: string[] = [...pasados];
     let fecha = this.primerDiaFuturo()!;
     for (let i = 0; i < 400 && resultado.length < (s.dias_sugeridos ?? 20); i++) {
-      if (s.dias_permitidos.includes(diaIso(fecha)) && !feriados.has(fecha)) resultado.push(fecha);
+      if (s.dias_permitidos.includes(diaIso(fecha)) && !this.catalogos.motivoNoLaborable(fecha)) resultado.push(fecha);
       fecha = sumarDias(fecha, 1);
     }
     this.cambiarFechas(resultado.sort());
   }
 
-  /** Quita días no disponibles y, si un horario no tiene días, le pone todos */
-  private ajustarDiasDeFilas(): void {
+  /**
+   * Quita días no disponibles y, si un horario no tiene días, le pone todos.
+   * Un horario que tenía TODOS los días disponibles antes del cambio sigue con
+   * todos (ej. se marcó un lunes y luego «Completar»: pasa a lunes a viernes).
+   */
+  private ajustarDiasDeFilas(antes: number[] = []): void {
     const disponibles = this.diasDisponibles();
+    const teniaTodos = (dias: number[]) => antes.length > 0 && dias.length === antes.length && antes.every((d) => dias.includes(d));
     this.filas.update((filas) => filas.map((f, i) => {
-      let dias = f.dias.filter((d) => disponibles.includes(d));
+      let dias = teniaTodos(f.dias) ? [...disponibles] : f.dias.filter((d) => disponibles.includes(d));
       if (!dias.length && i === 0 && this.sistema()?.modo_fechas === 'dias') dias = [...disponibles];
       return { ...f, dias };
     }));
@@ -799,14 +834,34 @@ export class AsignacionFormComponent implements OnInit {
   // Guardado
   // ------------------------------------------------------------------
 
-  protected async crearMateria(nombre: string): Promise<void> {
-    try {
-      const materia = await this.catalogos.guardar('materias', { nombre });
-      this.materiaId.set((materia as unknown as { id: number }).id);
-      this.notificaciones.exito(`Materia "${nombre}" creada.`);
-    } catch (e) {
-      this.notificaciones.error(e);
-    }
+  // ------------------------------------------------------------------
+  // Alta rápida de docente y materia (si no están en la lista)
+  // ------------------------------------------------------------------
+
+  protected readonly nuevoDocente = signal<FormDocente | null>(null);
+  protected readonly nuevaMateria = signal<FormMateria | null>(null);
+
+  /** Abre el alta de docente; lo escrito en el buscador se toma como "Nombres Apellidos" */
+  protected abrirNuevoDocente(texto: string): void {
+    const partes = texto.trim().split(/\s+/).filter(Boolean);
+    const apellidos = partes.length > 1 ? partes.pop()! : '';
+    this.nuevoDocente.set(docenteNuevo({ nombres: partes.join(' '), apellidos, carreras: this.facultadId() ? [this.facultadId()] : [] }));
+  }
+
+  /** El docente quedó guardado (o ya existía): se elige */
+  protected docenteAgregado(id: number): void {
+    this.nuevoDocente.set(null);
+    this.docenteId.set(id);
+    this.programarVerificacion();
+  }
+
+  protected abrirNuevaMateria(texto: string): void {
+    this.nuevaMateria.set(materiaNueva(texto.trim()));
+  }
+
+  protected materiaAgregada(id: number): void {
+    this.nuevaMateria.set(null);
+    this.materiaId.set(id);
   }
 
   protected async guardar(): Promise<void> {
@@ -829,7 +884,8 @@ export class AsignacionFormComponent implements OnInit {
       await this.ocupacion.guardarAsignacion({
         id: this.id() ?? null,
         sistema_id: this.sistemaId(),
-        fechas: modoDias ? this.fechasMarcadas() : null,
+        // Domingos y feriados no se guardan como días de clase
+        fechas: modoDias ? this.fechasMarcadas().filter((f) => !this.catalogos.motivoNoLaborable(f)) : null,
         fecha_inicio: modoDias ? null : this.fechaInicio(),
         fecha_fin: modoDias ? null : this.fechaFin(),
         carrera_id: this.facultadId(), docente_id: this.docenteId(), materia_id: this.materiaId(),
@@ -847,21 +903,16 @@ export class AsignacionFormComponent implements OnInit {
     }
   }
 
-  /** Registra que el docente dicta esa materia y pertenece a esa facultad */
+  /**
+   * Registra que el docente pertenece a esa facultad. Que dicta la materia
+   * lo anota la base al guardar la asignación (script 37); aquí solo se recarga.
+   */
   private async vincularDocente(): Promise<void> {
     const docenteId = this.docenteId()!;
     const docente = this.catalogos.mapaDocentes().get(docenteId);
-    const cliente = this.supabase.cliente;
-    const tareas: PromiseLike<unknown>[] = [];
-    if (!docente?.docente_materias?.some((m) => m.materia_id === this.materiaId())) {
-      tareas.push(cliente.from('docente_materias').upsert({ docente_id: docenteId, materia_id: this.materiaId() }, { ignoreDuplicates: true }));
-    }
     if (!docente?.docente_carreras?.some((c) => c.carrera_id === this.facultadId())) {
-      tareas.push(cliente.from('docente_carreras').upsert({ docente_id: docenteId, carrera_id: this.facultadId() }, { ignoreDuplicates: true }));
+      await this.supabase.cliente.from('docente_carreras').upsert({ docente_id: docenteId, carrera_id: this.facultadId() }, { ignoreDuplicates: true });
     }
-    if (tareas.length) {
-      await Promise.all(tareas);
-      await this.catalogos.recargar('docentes');
-    }
+    await this.catalogos.recargar('docentes');
   }
 }

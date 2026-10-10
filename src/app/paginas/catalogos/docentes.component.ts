@@ -1,26 +1,11 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { BuscadorComponent, OpcionBuscador } from '../../compartido/buscador.component';
 import { IconoComponent } from '../../compartido/icono.component';
-import { ModalComponent } from '../../compartido/modal.component';
+import { DocenteFormComponent, docenteAFormulario, docenteNuevo, FormDocente } from '../../compartido/docente-form.component';
 import { AuthService } from '../../core/auth.service';
 import { CatalogosService } from '../../core/catalogos.service';
 import { Docente } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
-import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
-
-/** Datos editables de un docente en el modal */
-interface FormDocente {
-  id: number | null;
-  nombres: string;
-  apellidos: string;
-  carnet: string;
-  telefono: string;
-  correo: string;
-  activo: boolean;
-  carreras: number[];
-  materias: number[];
-}
 
 /**
  * Catálogo de docentes con sus carreras (una o varias)
@@ -28,7 +13,7 @@ interface FormDocente {
  */
 @Component({
   selector: 'app-docentes',
-  imports: [FormsModule, ModalComponent, BuscadorComponent, IconoComponent],
+  imports: [FormsModule, DocenteFormComponent, IconoComponent],
   template: `
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
@@ -77,59 +62,17 @@ interface FormDocente {
     </div>
     <p class="mt-2 text-xs text-slate-500">{{ filtrados().length }} docente(s)</p>
 
-    <app-modal [abierto]="!!form()" [titulo]="form()?.id ? 'Editar docente' : 'Nuevo docente'" ancho="lg" (cerrar)="form.set(null)">
-      @if (form(); as f) {
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div><label class="etiqueta">Nombres *</label><input maxlength="80" class="campo" [(ngModel)]="f.nombres"></div>
-          <div><label class="etiqueta">Apellidos *</label><input maxlength="80" class="campo" [(ngModel)]="f.apellidos"></div>
-          <div><label class="etiqueta">Carnet</label><input maxlength="20" class="campo" [(ngModel)]="f.carnet"></div>
-          <div><label class="etiqueta">Teléfono</label><input maxlength="20" class="campo" [(ngModel)]="f.telefono"></div>
-          <div><label class="etiqueta">Correo</label><input maxlength="120" class="campo" type="email" [(ngModel)]="f.correo"></div>
-          <label class="mt-5 flex items-center gap-2 text-sm"><input type="checkbox" class="h-4 w-4 accent-marca-600" [(ngModel)]="f.activo"> Activo</label>
-
-          <div class="sm:col-span-2">
-            <label class="etiqueta">Facultades</label>
-            <div class="flex flex-wrap gap-1.5">
-              @for (c of catalogos.carreras(); track c.id) {
-                <button type="button" class="rounded-full border px-3 py-1 text-xs font-medium"
-                        [class]="f.carreras.includes(c.id) ? 'border-marca-600 bg-marca-600 text-white' : 'border-slate-300 bg-superficie'"
-                        (click)="alternar(f.carreras, c.id)">{{ c.nombre }}</button>
-              }
-            </div>
-          </div>
-
-          <div class="sm:col-span-2">
-            <label class="etiqueta">Materias que puede dictar</label>
-            <app-buscador [opciones]="opcionesMaterias()" [valor]="null" (valorChange)="agregarMateria($event)"
-                          placeholder="Buscar y agregar materia" [permitirCrear]="true" (crear)="crearMateria($event)" />
-            <div class="mt-2 flex flex-wrap gap-1.5">
-              @for (m of f.materias; track m) {
-                <span class="chip bg-marca-50 text-marca-700">
-                  {{ catalogos.mapaMaterias().get(m)?.nombre }}
-                  <button type="button" class="ml-1 opacity-60 hover:opacity-100" (click)="alternar(f.materias, m)"><app-icono nombre="cerrar" [tamano]="12" /></button>
-                </span>
-              } @empty { <span class="text-xs text-slate-400">Ninguna todavía (se agregan solas al crear asignaciones).</span> }
-            </div>
-          </div>
-        </div>
-      }
-      <ng-container pie>
-        <button class="btn-secundario" (click)="form.set(null)">Cancelar</button>
-        <button class="btn-primario" (click)="guardar()" [disabled]="guardando()">{{ guardando() ? 'Guardando…' : 'Guardar' }}</button>
-      </ng-container>
-    </app-modal>
+    <app-docente-form [datos]="form()" (cerrar)="form.set(null)" (guardado)="form.set(null)" />
   `,
 })
 export class DocentesComponent {
   protected readonly auth = inject(AuthService);
   protected readonly catalogos = inject(CatalogosService);
-  private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
 
   protected readonly busqueda = signal('');
   protected readonly carreraFiltro = signal(0);
   protected readonly form = signal<FormDocente | null>(null);
-  protected readonly guardando = signal(false);
 
   protected readonly filtrados = computed(() => {
     const texto = this.busqueda().trim().toLowerCase();
@@ -137,9 +80,6 @@ export class DocentesComponent {
       (!this.carreraFiltro() || (d.docente_carreras ?? []).some((c) => c.carrera_id === this.carreraFiltro())) &&
       (!texto || `${d.apellidos} ${d.nombres} ${d.carnet ?? ''}`.toLowerCase().includes(texto)));
   });
-
-  protected readonly opcionesMaterias = computed<OpcionBuscador[]>(() =>
-    this.catalogos.materias().map((m) => ({ id: m.id, texto: m.nombre })));
 
   protected colorCarrera(id: number): string {
     return this.catalogos.mapaCarreras().get(id)?.color ?? '#64748b';
@@ -154,73 +94,12 @@ export class DocentesComponent {
     return (d.docente_materias ?? []).map((m) => this.catalogos.mapaMaterias().get(m.materia_id)?.nombre).filter(Boolean).join(', ');
   }
 
-  /** Agrega o quita un id de una lista (en el formulario) */
-  protected alternar(lista: number[], id: number): void {
-    const i = lista.indexOf(id);
-    if (i >= 0) lista.splice(i, 1);
-    else lista.push(id);
-    this.form.update((f) => (f ? { ...f } : f));
-  }
-
-  protected agregarMateria(id: number | null): void {
-    const f = this.form();
-    if (id && f && !f.materias.includes(id)) this.alternar(f.materias, id);
-  }
-
-  protected async crearMateria(nombre: string): Promise<void> {
-    try {
-      const materia = (await this.catalogos.guardar('materias', { nombre })) as unknown as { id: number };
-      this.agregarMateria(materia.id);
-    } catch (e) {
-      this.notificaciones.error(e);
-    }
-  }
-
   protected nuevo(): void {
-    this.form.set({ id: null, nombres: '', apellidos: '', carnet: '', telefono: '', correo: '', activo: true, carreras: [], materias: [] });
+    this.form.set(docenteNuevo());
   }
 
   protected editar(d: Docente): void {
-    this.form.set({
-      id: d.id, nombres: d.nombres, apellidos: d.apellidos, carnet: d.carnet ?? '', telefono: d.telefono ?? '',
-      correo: d.correo ?? '', activo: d.activo,
-      carreras: (d.docente_carreras ?? []).map((c) => c.carrera_id),
-      materias: (d.docente_materias ?? []).map((m) => m.materia_id),
-    });
-  }
-
-  /** Guarda el docente y sincroniza sus carreras y materias */
-  protected async guardar(): Promise<void> {
-    const f = this.form();
-    if (!f) return;
-    if (!f.nombres.trim() || !f.apellidos.trim()) {
-      this.notificaciones.aviso('Nombres y apellidos son obligatorios.');
-      return;
-    }
-    this.guardando.set(true);
-    try {
-      const docente = (await this.catalogos.guardar('docentes', {
-        id: f.id, nombres: f.nombres.trim(), apellidos: f.apellidos.trim(), carnet: f.carnet.trim() || null,
-        telefono: f.telefono.trim() || null, correo: f.correo.trim() || null, activo: f.activo,
-      })) as unknown as { id: number };
-      const cliente = this.supabase.cliente;
-      // Reemplaza relaciones: borra y vuelve a insertar
-      await this.verificar(cliente.from('docente_carreras').delete().eq('docente_id', docente.id));
-      await this.verificar(cliente.from('docente_materias').delete().eq('docente_id', docente.id));
-      if (f.carreras.length) {
-        await this.verificar(cliente.from('docente_carreras').insert(f.carreras.map((carrera_id) => ({ docente_id: docente.id, carrera_id }))));
-      }
-      if (f.materias.length) {
-        await this.verificar(cliente.from('docente_materias').insert(f.materias.map((materia_id) => ({ docente_id: docente.id, materia_id }))));
-      }
-      await this.catalogos.recargar('docentes');
-      this.notificaciones.exito('Docente guardado.');
-      this.form.set(null);
-    } catch (e) {
-      this.notificaciones.error(e, 'No se guardó');
-    } finally {
-      this.guardando.set(false);
-    }
+    this.form.set(docenteAFormulario(d));
   }
 
   protected async eliminar(d: Docente): Promise<void> {
@@ -231,11 +110,5 @@ export class DocentesComponent {
     } catch (e) {
       this.notificaciones.error(e, 'No se pudo eliminar (¿tiene asignaciones?). Puede marcarlo como inactivo');
     }
-  }
-
-  /** Lanza error si la operación de Supabase falló */
-  private async verificar(operacion: PromiseLike<{ error: unknown }>): Promise<void> {
-    const { error } = await operacion;
-    if (error) throw new ErrorSistema(error as { message: string });
   }
 }

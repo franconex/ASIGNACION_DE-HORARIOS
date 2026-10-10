@@ -1,13 +1,14 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { GraficoBarrasComponent } from '../../compartido/grafico-barras.component';
 import { GraficoLineasComponent } from '../../compartido/grafico-lineas.component';
 import { SerieGrafico } from '../../compartido/graficos';
 import { IconoComponent } from '../../compartido/icono.component';
 import { AuthService } from '../../core/auth.service';
 import { descargarCsv } from '../../core/exportar';
-import { DIAS_CORTOS, DIAS_SEMANA, hoyIso } from '../../core/fechas';
+import { DIAS_CORTOS, DIAS_SEMANA, fechaCorta, hoyIso, sumarDias } from '../../core/fechas';
 import { OperacionService, textoRetraso } from '../../core/operacion.service';
 import { CATEGORIAS_FALLA, CategoriaTicket, COLOR_CATEGORIA, TIPOS_TICKET } from '../../core/tickets';
 import { CategoriaFalla, EstadoPc, TipoAtencion, TurnoCodigo } from '../../core/modelos';
@@ -109,6 +110,18 @@ const ESTADOS_PC: { clave: EstadoPc; texto: string; clase: string }[] = [
   { clave: 'baja', texto: 'De baja', clase: 'bg-rose-500' },
 ];
 
+/** Secciones del dashboard (una a la vez, para no mostrar todo junto) */
+type Seccion = 'resumen' | 'tickets' | 'auxiliares' | 'pcs' | 'uso';
+const SECCIONES: { clave: Seccion; texto: string; icono: string }[] = [
+  { clave: 'resumen', texto: 'Resumen', icono: 'panel' },
+  { clave: 'tickets', texto: 'Tickets', icono: 'registros' },
+  { clave: 'auxiliares', texto: 'Auxiliares y turnos', icono: 'usuarios' },
+  { clave: 'pcs', texto: 'PCs y fallas', icono: 'equipo' },
+  { clave: 'uso', texto: 'Uso de laboratorios', icono: 'laboratorio' },
+];
+/** Rango máximo de consulta (días) */
+const MAXIMO_DIAS = 366;
+
 /** Primer y último día de un mes "AAAA-MM" */
 function rangoMes(mes: string): { desde: string; hasta: string } {
   const [a, m] = mes.split('-').map(Number);
@@ -125,31 +138,73 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
   selector: 'app-desempeno',
   imports: [FormsModule, IconoComponent, DatePipe, DecimalPipe, GraficoLineasComponent, GraficoBarrasComponent],
   template: `
-    <header class="mb-4 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-bold">Desempeño</h1>
-        <p class="mt-0.5 text-sm text-slate-600">Tickets, auxiliares, cierres de turno, PCs y uso de laboratorios del mes. Pasa el mouse (o toca, en el celular) por los gráficos para ver el detalle.</p>
-      </div>
-      <div class="flex flex-wrap items-end gap-2">
+    <header class="mb-4">
+      <div class="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <label class="etiqueta">Mes</label>
-          <input type="month" class="campo !w-44 !py-1.5" [ngModel]="mes()" (ngModelChange)="cambiarMes($event)">
+          <h1 class="text-2xl font-bold">Desempeño</h1>
+          <p class="mt-0.5 text-sm text-slate-600">{{ textoPeriodo() }}</p>
         </div>
-        <button class="btn-secundario btn-sm" (click)="moverMes(-1)"><app-icono nombre="anterior" [tamano]="14" /> Anterior</button>
-        <button class="btn-secundario btn-sm" (click)="cambiarMes(mesActual)" [disabled]="mes() === mesActual">Este mes</button>
         <button class="btn-secundario btn-sm" (click)="exportar()" [disabled]="!datos()"><app-icono nombre="descargar" [tamano]="14" /> Exportar</button>
       </div>
+
+      <!-- Periodo -->
+      <div class="tarjeta mt-3 flex flex-wrap items-end gap-2 p-3">
+        <div class="flex rounded-lg border border-slate-300 bg-superficie p-0.5 text-sm">
+          <button class="rounded-md px-3 py-1.5" [class]="modo() === 'mes' ? 'bg-marca-600 text-white' : 'text-slate-600'" (click)="usarMes()">Por mes</button>
+          <button class="rounded-md px-3 py-1.5" [class]="modo() === 'rango' ? 'bg-marca-600 text-white' : 'text-slate-600'" (click)="usarRango()">Entre fechas</button>
+        </div>
+        @if (modo() === 'mes') {
+          <div class="flex items-end gap-1">
+            <button class="btn-secundario btn-sm !py-2" (click)="moverMes(-1)" aria-label="Mes anterior"><app-icono nombre="anterior" [tamano]="16" /></button>
+            <input type="month" class="campo !w-44 !py-1.5" [ngModel]="mes()" (ngModelChange)="cambiarMes($event)" aria-label="Mes">
+            <button class="btn-secundario btn-sm !py-2" (click)="moverMes(1)" [disabled]="mes() >= mesActual" aria-label="Mes siguiente"><app-icono nombre="siguiente" [tamano]="16" /></button>
+          </div>
+          <button class="btn-fantasma btn-sm" (click)="cambiarMes(mesActual)" [disabled]="mes() === mesActual">Este mes</button>
+        } @else {
+          <div>
+            <label class="etiqueta" for="desempeno-desde">Desde</label>
+            <input id="desempeno-desde" type="date" class="campo !py-1.5" [ngModel]="desde()" (ngModelChange)="desde.set($event)" [max]="hasta()">
+          </div>
+          <div>
+            <label class="etiqueta" for="desempeno-hasta">Hasta</label>
+            <input id="desempeno-hasta" type="date" class="campo !py-1.5" [ngModel]="hasta()" (ngModelChange)="hasta.set($event)" [min]="desde()">
+          </div>
+          <div class="flex flex-wrap gap-1">
+            @for (a of atajos; track a.texto) {
+              <button class="btn-fantasma btn-sm" (click)="aplicarAtajo(a.dias)">{{ a.texto }}</button>
+            }
+          </div>
+          <button class="btn-primario btn-sm !py-2" (click)="cargar()" [disabled]="!!errorRango() || cargando()">Ver</button>
+          @if (errorRango()) { <p class="w-full text-xs text-red-700">{{ errorRango() }}</p> }
+        }
+        @if (cargando()) { <span class="ml-auto self-center text-xs text-slate-500">Cargando…</span> }
+      </div>
+
+      <!-- Secciones -->
+      <nav class="sticky top-0 z-20 -mx-4 mt-3 flex gap-1.5 overflow-x-auto bg-fondo px-4 py-2 sm:mx-0 sm:px-0" aria-label="Secciones del dashboard">
+        @for (s of secciones; track s.clave) {
+          <button class="flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition"
+                  [class]="seccion() === s.clave ? 'border-marca-600 bg-marca-600 text-white' : 'border-slate-300 bg-superficie text-slate-600 hover:border-marca-300'"
+                  [attr.aria-pressed]="seccion() === s.clave" (click)="irA(s.clave)">
+            <app-icono [nombre]="s.icono" [tamano]="15" /> {{ s.texto }}
+          </button>
+        }
+      </nav>
     </header>
 
     @if (datos(); as d) {
-      <!-- INDICADORES -->
+      @switch (seccion()) {
+        @case ('resumen') {
+          <!-- RESUMEN: lo más importante de cada área, en un vistazo -->
+          <p class="mb-3 text-sm text-slate-500">Toque un indicador para ver su detalle.</p>
+          <button class="mb-2 flex items-center gap-1 text-sm font-semibold text-slate-700 hover:text-marca-700" (click)="irA('tickets')">Tickets <app-icono nombre="siguiente" [tamano]="14" /></button>
       <div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <div class="tarjeta p-3">
-          <p class="text-xs text-slate-500">Tickets del mes</p>
+          <p class="text-xs text-slate-500">Tickets del periodo</p>
           <p class="text-3xl font-bold tabular-nums">{{ d.kpis.tickets }}</p>
           <p class="text-xs" [class]="variacion() === null ? 'text-slate-400' : variacion()! >= 0 ? 'text-emerald-700' : 'text-rose-700'">
-            @if (variacion() !== null) { {{ variacion()! >= 0 ? '▲' : '▼' }} {{ variacion()! | number: '1.0-0' }}% vs mes anterior ({{ d.kpis.tickets_anterior }}) }
-            @else { Mes anterior: {{ d.kpis.tickets_anterior }} }
+            @if (variacion() !== null) { {{ variacion()! >= 0 ? '▲' : '▼' }} {{ variacion()! | number: '1.0-0' }}% vs periodo anterior ({{ d.kpis.tickets_anterior }}) }
+            @else { Periodo anterior: {{ d.kpis.tickets_anterior }} }
           </p>
         </div>
         <div class="tarjeta p-3">
@@ -181,15 +236,113 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
           <p class="text-xs text-slate-500">{{ d.pcs.mantenimiento }} en mant. · {{ d.pcs.baja }} de baja</p>
         </div>
       </div>
-
+          <div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+            @for (k of resumenExtra(); track k.titulo) {
+              <button class="tarjeta p-3 text-left transition hover:border-marca-300" (click)="irA(k.seccion)">
+                <p class="text-xs text-slate-500">{{ k.titulo }}</p>
+                <p class="text-3xl font-bold tabular-nums" [class]="k.alerta ? 'text-amber-700' : ''">{{ k.valor }}</p>
+                <p class="flex items-center justify-between gap-1 text-xs text-slate-500">{{ k.nota }} <app-icono nombre="siguiente" [tamano]="12" class="text-slate-400" /></p>
+              </button>
+            }
+          </div>
       <!-- TICKETS POR DÍA -->
       <section class="tarjeta mb-5 p-4">
         <h2 class="font-semibold">Tickets por día</h2>
         <p class="mb-3 text-xs text-slate-500">{{ d.kpis.tickets }} tickets en {{ diasConTrabajo() }} días con actividad; la línea punteada son los que ya se resolvieron</p>
         <app-grafico-lineas [etiquetas]="diasMes()" [titulos]="titulosMes()" [series]="seriesTicketsDia()" [alto]="220" />
       </section>
+        }
 
-      <div class="mb-5 grid gap-5 xl:grid-cols-[1.4fr_1fr] [&>*]:min-w-0">
+        @case ('tickets') {
+      <!-- TICKETS POR DÍA -->
+      <section class="tarjeta mb-5 p-4">
+        <h2 class="font-semibold">Tickets por día</h2>
+        <p class="mb-3 text-xs text-slate-500">{{ d.kpis.tickets }} tickets en {{ diasConTrabajo() }} días con actividad; la línea punteada son los que ya se resolvieron</p>
+        <app-grafico-lineas [etiquetas]="diasMes()" [titulos]="titulosMes()" [series]="seriesTicketsDia()" [alto]="220" />
+      </section>
+          <div class="mb-5">
+        <!-- POR TIPO -->
+        <section class="tarjeta p-4">
+          <h2 class="font-semibold">Qué se hizo</h2>
+          <p class="mb-2 text-xs text-slate-500">Tickets por categoría y tipo de trabajo</p>
+          <div class="mb-3 flex flex-wrap gap-1.5">
+            @for (c of porCategoria(); track c.texto) {
+              <span class="chip" [class]="c.clase">{{ c.texto }} · <b class="tabular-nums">{{ c.tickets }}</b></span>
+            }
+          </div>
+          <div class="space-y-2.5">
+            @for (t of d.por_tipo; track t.tipo) {
+              <div class="cursor-default" (mousemove)="verTip($event, tipos[t.tipo], [{ color: 'var(--serie-1)', texto: 'Tickets', valor: t.tickets }, { texto: 'Trabajos', valor: t.trabajos }])" (mouseleave)="tip.set(null)">
+                <div class="mb-0.5 flex justify-between text-sm"><span>{{ tipos[t.tipo] }}</span><span class="font-semibold tabular-nums">{{ t.tickets }}</span></div>
+                <div class="h-2.5 rounded-r-[4px] bg-[var(--serie-1)]" [style.width.%]="(t.tickets / topeTipo()) * 100"></div>
+              </div>
+            } @empty {
+              <p class="py-6 text-center text-sm text-slate-500">Sin tickets en este periodo.</p>
+            }
+          </div>
+        </section>
+          </div>
+      @if (detalle(); as x) {
+        <div class="mb-5 grid gap-5 lg:grid-cols-2 [&>*]:min-w-0">
+          <section class="tarjeta p-4">
+            <h2 class="font-semibold">Tickets por turno</h2>
+            <p class="mb-3 text-xs text-slate-500">Según la hora en que se registraron y el horario de cada turno</p>
+            <app-grafico-barras [etiquetas]="turnosDe(x.tickets_por_turno)" [series]="seriesTicketsTurno()" [alto]="190" />
+          </section>
+          <section class="tarjeta p-4">
+            <h2 class="font-semibold">Tickets por día de la semana</h2>
+            <p class="mb-3 text-xs text-slate-500">Qué días hay más trabajo</p>
+            <app-grafico-barras [etiquetas]="diasCortos" [titulos]="diasLargos" [series]="seriesTicketsSemana()" [alto]="190" />
+          </section>
+        </div>
+
+        <section class="tarjeta mb-5 p-4">
+          <h2 class="font-semibold">Tiempo para resolver, por tipo de ticket</h2>
+          <p class="mb-3 text-xs text-slate-500">Promedio en horas, solo tickets que se resolvieron después de registrarlos</p>
+          <div class="grid gap-x-8 gap-y-2.5 md:grid-cols-2 [&>*]:min-w-0">
+            @for (r of x.resolucion_por_tipo; track r.tipo) {
+              <div class="cursor-default" (mousemove)="verTip($event, tipos[r.tipo], [{ color: colorSerie1, texto: 'Promedio', valor: r.horas + ' h' }, { texto: 'Tickets', valor: r.tickets }])" (mouseleave)="tip.set(null)">
+                <div class="mb-0.5 flex justify-between text-sm"><span>{{ tipos[r.tipo] }}</span><span class="font-semibold tabular-nums">{{ r.horas | number: '1.0-1' }} h</span></div>
+                <div class="h-2.5 rounded-r-[4px] bg-[var(--serie-1)]" [style.width.%]="(r.horas / topeResolucion()) * 100"></div>
+              </div>
+            } @empty {
+              <p class="py-4 text-sm text-slate-500 md:col-span-2">Aún no hay tickets resueltos con tiempo medible en este periodo.</p>
+            }
+          </div>
+          <p class="mt-3 text-xs text-slate-500">
+            Por turno:
+            @for (t of x.tickets_por_turno; track t.turno; let ultimo = $last) {
+              <b class="text-slate-700">{{ turnos[t.turno] }}</b> {{ t.horas_resolucion !== null ? (t.horas_resolucion | number: '1.0-1') + ' h' : '—' }}{{ ultimo ? '' : ' · ' }}
+            }
+          </p>
+        </section>
+      }
+      <!-- PCs CON MÁS TICKETS -->
+      <section>
+        <h2 class="mb-2 font-semibold">PCs con más tickets</h2>
+        <div class="tarjeta overflow-x-auto">
+          <table class="tabla">
+            <thead><tr><th>PC</th><th>Laboratorio</th><th>Estado</th><th class="text-right">Tickets</th><th>Último</th></tr></thead>
+            <tbody>
+              @for (p of d.top_pcs; track p.etiqueta) {
+                <tr>
+                  <td class="font-mono text-sm font-semibold">{{ p.etiqueta }}</td>
+                  <td>{{ p.lab }}</td>
+                  <td><span class="inline-flex items-center gap-1.5 text-sm"><span class="h-2.5 w-2.5 rounded-sm" [class]="claseEstado(p.estado)"></span>{{ textoEstado(p.estado) }}</span></td>
+                  <td class="text-right font-semibold tabular-nums">{{ p.tickets }}</td>
+                  <td class="text-sm text-slate-500">{{ p.ultimo | date: 'dd/MM HH:mm' }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="5" class="py-6 text-center text-sm text-slate-500">Ninguna PC tuvo tickets en este periodo.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+        }
+
+        @case ('auxiliares') {
+          <div class="mb-5">
         <!-- RANKING DE AUXILIARES -->
         <section class="tarjeta p-4">
           <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -229,102 +382,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
             }
           </div>
         </section>
-
-        <!-- POR TIPO -->
-        <section class="tarjeta p-4">
-          <h2 class="font-semibold">Qué se hizo</h2>
-          <p class="mb-2 text-xs text-slate-500">Tickets por categoría y tipo de trabajo</p>
-          <div class="mb-3 flex flex-wrap gap-1.5">
-            @for (c of porCategoria(); track c.texto) {
-              <span class="chip" [class]="c.clase">{{ c.texto }} · <b class="tabular-nums">{{ c.tickets }}</b></span>
-            }
           </div>
-          <div class="space-y-2.5">
-            @for (t of d.por_tipo; track t.tipo) {
-              <div class="cursor-default" (mousemove)="verTip($event, tipos[t.tipo], [{ color: 'var(--serie-1)', texto: 'Tickets', valor: t.tickets }, { texto: 'Trabajos', valor: t.trabajos }])" (mouseleave)="tip.set(null)">
-                <div class="mb-0.5 flex justify-between text-sm"><span>{{ tipos[t.tipo] }}</span><span class="font-semibold tabular-nums">{{ t.tickets }}</span></div>
-                <div class="h-2.5 rounded-r-[4px] bg-[var(--serie-1)]" [style.width.%]="(t.tickets / topeTipo()) * 100"></div>
-              </div>
-            } @empty {
-              <p class="py-6 text-center text-sm text-slate-500">Sin tickets este mes.</p>
-            }
-          </div>
-        </section>
-      </div>
-
-      @if (detalle(); as x) {
-        <div class="mb-5 grid gap-5 lg:grid-cols-2 [&>*]:min-w-0">
-          <section class="tarjeta p-4">
-            <h2 class="font-semibold">Tickets por turno</h2>
-            <p class="mb-3 text-xs text-slate-500">Según la hora en que se registraron y el horario de cada turno</p>
-            <app-grafico-barras [etiquetas]="turnosDe(x.tickets_por_turno)" [series]="seriesTicketsTurno()" [alto]="190" />
-          </section>
-          <section class="tarjeta p-4">
-            <h2 class="font-semibold">Tickets por día de la semana</h2>
-            <p class="mb-3 text-xs text-slate-500">Qué días hay más trabajo</p>
-            <app-grafico-barras [etiquetas]="diasCortos" [titulos]="diasLargos" [series]="seriesTicketsSemana()" [alto]="190" />
-          </section>
-        </div>
-
-        <section class="tarjeta mb-5 p-4">
-          <h2 class="font-semibold">Tiempo para resolver, por tipo de ticket</h2>
-          <p class="mb-3 text-xs text-slate-500">Promedio en horas, solo tickets que se resolvieron después de registrarlos</p>
-          <div class="grid gap-x-8 gap-y-2.5 md:grid-cols-2 [&>*]:min-w-0">
-            @for (r of x.resolucion_por_tipo; track r.tipo) {
-              <div class="cursor-default" (mousemove)="verTip($event, tipos[r.tipo], [{ color: colorSerie1, texto: 'Promedio', valor: r.horas + ' h' }, { texto: 'Tickets', valor: r.tickets }])" (mouseleave)="tip.set(null)">
-                <div class="mb-0.5 flex justify-between text-sm"><span>{{ tipos[r.tipo] }}</span><span class="font-semibold tabular-nums">{{ r.horas | number: '1.0-1' }} h</span></div>
-                <div class="h-2.5 rounded-r-[4px] bg-[var(--serie-1)]" [style.width.%]="(r.horas / topeResolucion()) * 100"></div>
-              </div>
-            } @empty {
-              <p class="py-4 text-sm text-slate-500 md:col-span-2">Aún no hay tickets resueltos con tiempo medible este mes.</p>
-            }
-          </div>
-          <p class="mt-3 text-xs text-slate-500">
-            Por turno:
-            @for (t of x.tickets_por_turno; track t.turno; let ultimo = $last) {
-              <b class="text-slate-700">{{ turnos[t.turno] }}</b> {{ t.horas_resolucion !== null ? (t.horas_resolucion | number: '1.0-1') + ' h' : '—' }}{{ ultimo ? '' : ' · ' }}
-            }
-          </p>
-        </section>
-      }
-
-      <!-- PCs POR LABORATORIO -->
-      <section class="tarjeta mb-5 p-4">
-        <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h2 class="font-semibold">Laboratorios: PCs y tickets</h2>
-            <p class="text-xs text-slate-500">{{ d.pcs.total }} PCs en total ({{ d.pcs.docentes }} de docente)</p>
-          </div>
-          <div class="flex flex-wrap gap-3 text-xs text-slate-600">
-            @for (e of estadosPc; track e.clave) {
-              <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" [class]="e.clase"></span> {{ e.texto }}</span>
-            }
-          </div>
-        </div>
-        <div class="space-y-2">
-          @for (l of d.por_lab; track l.id) {
-            <div class="grid cursor-default grid-cols-[4.5rem_1fr_6.5rem] items-center gap-3 rounded-md px-1 py-0.5 hover:bg-slate-100/60"
-                 (mousemove)="verTipLab($event, l)" (mouseleave)="tip.set(null)">
-              <span class="flex items-center gap-1.5 text-sm font-semibold"><span class="h-3 w-1 rounded-full" [style.background]="l.color"></span>{{ l.codigo }}</span>
-              @if (l.pcs.total) {
-                <span class="flex h-4 gap-[2px]" [style.width.%]="(l.pcs.total / topeLab()) * 100">
-                  @for (e of estadosPc; track e.clave; let ultimo = $last) {
-                    @if (l.pcs[e.clave]) {
-                      <span class="h-full first:rounded-l-[2px] last:rounded-r-[4px]" [class]="e.clase" [style.flex-grow]="l.pcs[e.clave]"></span>
-                    }
-                  }
-                </span>
-              } @else {
-                <span class="text-xs text-slate-400">Sin PCs cargadas</span>
-              }
-              <span class="text-right text-xs text-slate-500 tabular-nums">
-                <b class="text-slate-700">{{ l.pcs.total }}</b> PCs · <b class="text-slate-700">{{ l.tickets }}</b> tk
-              </span>
-            </div>
-          }
-        </div>
-      </section>
-
       <!-- DETALLE POR AUXILIAR -->
       <section class="mb-5">
         <h2 class="mb-2 font-semibold">Detalle por auxiliar</h2>
@@ -357,38 +415,11 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
         </div>
         <p class="mt-1 text-xs text-slate-400">Un trabajo en 20 PCs cuenta como 20 tickets y 1 trabajo. "Colaboró" son tickets que registró otro.</p>
       </section>
-
-      <!-- PCs CON MÁS TICKETS -->
-      <section>
-        <h2 class="mb-2 font-semibold">PCs con más tickets</h2>
-        <div class="tarjeta overflow-x-auto">
-          <table class="tabla">
-            <thead><tr><th>PC</th><th>Laboratorio</th><th>Estado</th><th class="text-right">Tickets</th><th>Último</th></tr></thead>
-            <tbody>
-              @for (p of d.top_pcs; track p.etiqueta) {
-                <tr>
-                  <td class="font-mono text-sm font-semibold">{{ p.etiqueta }}</td>
-                  <td>{{ p.lab }}</td>
-                  <td><span class="inline-flex items-center gap-1.5 text-sm"><span class="h-2.5 w-2.5 rounded-sm" [class]="claseEstado(p.estado)"></span>{{ textoEstado(p.estado) }}</span></td>
-                  <td class="text-right font-semibold tabular-nums">{{ p.tickets }}</td>
-                  <td class="text-sm text-slate-500">{{ p.ultimo | date: 'dd/MM HH:mm' }}</td>
-                </tr>
-              } @empty {
-                <tr><td colspan="5" class="py-6 text-center text-sm text-slate-500">Ninguna PC tuvo tickets este mes.</td></tr>
-              }
-            </tbody>
-          </table>
-        </div>
-      </section>
-      @if (detalle(); as x) {
-        <!-- CIERRES DE TURNO -->
-        <div class="mt-8 mb-4 border-t border-slate-200 pt-6">
-          <h2 class="flex items-center gap-2 text-xl font-bold"><app-icono nombre="hora" [tamano]="20" /> Cierres de turno</h2>
-          <p class="mt-0.5 text-sm text-slate-600">Cuántos turnos se cerraron, quién cerró tarde y cuánto, y las PCs dadas de baja en los cierres.</p>
-        </div>
+          @if (detalle(); as x) {
+            <h2 class="mt-6 mb-3 flex items-center gap-2 text-lg font-semibold"><app-icono nombre="hora" [tamano]="18" /> Cierres de turno</h2>
         <div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
           <div class="tarjeta p-3">
-            <p class="text-xs text-slate-500">Cierres del mes</p>
+            <p class="text-xs text-slate-500">Cierres del periodo</p>
             <p class="text-3xl font-bold tabular-nums">{{ x.cierres.total }}</p>
             <p class="text-xs text-slate-500">{{ x.cierres.sin_horario }} sin horario registrado</p>
           </div>
@@ -410,7 +441,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
           <div class="tarjeta p-3">
             <p class="text-xs text-slate-500">PCs dadas de baja</p>
             <p class="text-3xl font-bold tabular-nums" [class.text-rose-700]="x.bajas.length > 0">{{ x.bajas.length }}</p>
-            <p class="text-xs text-slate-500">{{ x.reactivadas }} reactivadas este mes</p>
+            <p class="text-xs text-slate-500">{{ x.reactivadas }} reactivadas en este periodo</p>
           </div>
         </div>
 
@@ -466,16 +497,76 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                     <td class="text-right tabular-nums" [class.text-rose-700]="a.pcs_baja > 0">{{ a.pcs_baja }}</td>
                   </tr>
                 } @empty {
-                  <tr><td colspan="7" class="py-6 text-center text-sm text-slate-500">No hubo cierres de turno este mes.</td></tr>
+                  <tr><td colspan="7" class="py-6 text-center text-sm text-slate-500">No hubo cierres de turno en este periodo.</td></tr>
                 }
               </tbody>
             </table>
           </div>
         </section>
+        <!-- OBJETOS PERDIDOS -->
+        <section class="tarjeta mb-5 p-4">
+          <h3 class="flex items-center gap-2 font-semibold"><app-icono nombre="objeto" [tamano]="17" /> Objetos perdidos</h3>
+          <p class="mb-3 text-xs text-slate-500">
+            <b class="text-slate-700">{{ x.objetos.registrados }}</b> encontrados en este periodo ·
+            <b class="text-slate-700">{{ x.objetos.entregados }}</b> entregados ·
+            <b class="text-slate-700">{{ x.objetos.en_custodia }}</b> en custodia ahora
+          </p>
+          <div class="space-y-2">
+            @for (l of x.objetos.por_lab; track l.codigo) {
+              <div class="grid grid-cols-[4.5rem_1fr_2rem] items-center gap-3">
+                <span class="flex items-center gap-1.5 text-sm font-semibold"><span class="h-3 w-1 rounded-full" [style.background]="l.color"></span>{{ l.codigo }}</span>
+                <span class="h-2.5 rounded-r-[4px] bg-[var(--serie-1)]" [style.width.%]="(l.objetos / topeObjetos()) * 100"></span>
+                <span class="text-right text-sm font-semibold tabular-nums">{{ l.objetos }}</span>
+              </div>
+            } @empty {
+              <p class="py-2 text-sm text-slate-500">No se registraron objetos en este periodo.</p>
+            }
+          </div>
+        </section>
+          }
+        }
 
+        @case ('pcs') {
+      <!-- PCs POR LABORATORIO -->
+      <section class="tarjeta mb-5 p-4">
+        <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 class="font-semibold">Laboratorios: PCs y tickets</h2>
+            <p class="text-xs text-slate-500">{{ d.pcs.total }} PCs en total ({{ d.pcs.docentes }} de docente)</p>
+          </div>
+          <div class="flex flex-wrap gap-3 text-xs text-slate-600">
+            @for (e of estadosPc; track e.clave) {
+              <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm" [class]="e.clase"></span> {{ e.texto }}</span>
+            }
+          </div>
+        </div>
+        <div class="space-y-2">
+          @for (l of d.por_lab; track l.id) {
+            <div class="grid cursor-default grid-cols-[4.5rem_1fr_6.5rem] items-center gap-3 rounded-md px-1 py-0.5 hover:bg-slate-100/60"
+                 (mousemove)="verTipLab($event, l)" (mouseleave)="tip.set(null)">
+              <span class="flex items-center gap-1.5 text-sm font-semibold"><span class="h-3 w-1 rounded-full" [style.background]="l.color"></span>{{ l.codigo }}</span>
+              @if (l.pcs.total) {
+                <span class="flex h-4 gap-[2px]" [style.width.%]="(l.pcs.total / topeLab()) * 100">
+                  @for (e of estadosPc; track e.clave; let ultimo = $last) {
+                    @if (l.pcs[e.clave]) {
+                      <span class="h-full first:rounded-l-[2px] last:rounded-r-[4px]" [class]="e.clase" [style.flex-grow]="l.pcs[e.clave]"></span>
+                    }
+                  }
+                </span>
+              } @else {
+                <span class="text-xs text-slate-400">Sin PCs cargadas</span>
+              }
+              <span class="text-right text-xs text-slate-500 tabular-nums">
+                <b class="text-slate-700">{{ l.pcs.total }}</b> PCs · <b class="text-slate-700">{{ l.tickets }}</b> tk
+              </span>
+            </div>
+          }
+        </div>
+      </section>
+          @if (detalle(); as x) {
         <!-- PCs DADAS DE BAJA -->
         <section class="mb-5">
-          <h3 class="mb-2 font-semibold">PCs dadas de baja este mes</h3>
+          <h3 class="mb-2 font-semibold">PCs dadas de baja en este periodo</h3>
           <div class="tarjeta overflow-x-auto">
             <table class="tabla">
               <thead><tr><th>PC</th><th>Laboratorio</th><th>Motivo</th><th>Quién</th><th>Cuándo</th></tr></thead>
@@ -489,22 +580,18 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                     <td class="text-sm whitespace-nowrap text-slate-500">{{ b.en | date: 'dd/MM HH:mm' }}</td>
                   </tr>
                 } @empty {
-                  <tr><td colspan="5" class="py-6 text-center text-sm text-slate-500">Ninguna PC se dio de baja este mes.</td></tr>
+                  <tr><td colspan="5" class="py-6 text-center text-sm text-slate-500">Ninguna PC se dio de baja en este periodo.</td></tr>
                 }
               </tbody>
             </table>
           </div>
         </section>
-
-        <!-- FALLAS DE PCs (fichas de reparación) -->
+          }
         @if (fallas(); as fx) {
-          <div class="mt-8 mb-4 border-t border-slate-200 pt-6">
-            <h2 class="flex items-center gap-2 text-xl font-bold"><app-icono nombre="mantenimiento" [tamano]="20" /> Fallas de PCs</h2>
-            <p class="mt-0.5 text-sm text-slate-600">Qué falla más, qué PCs se reparan una y otra vez y qué piezas se cambian (de las fichas de reparación del mes).</p>
-          </div>
+          <h2 class="mt-6 mb-3 flex items-center gap-2 text-lg font-semibold"><app-icono nombre="mantenimiento" [tamano]="18" /> Fallas de PCs</h2>
           <div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
             <div class="tarjeta p-3">
-              <p class="text-xs text-slate-500">Correctivos del mes</p>
+              <p class="text-xs text-slate-500">Correctivos del periodo</p>
               <p class="text-3xl font-bold tabular-nums">{{ fx.total }}</p>
               <p class="text-xs text-slate-500">{{ fx.con_ficha }} con ficha de fallas</p>
             </div>
@@ -553,7 +640,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                     <div class="h-2.5 rounded-r-[4px] bg-[var(--serie-1)]" [style.width.%]="(fa.veces / topeFalla()) * 100"></div>
                   </div>
                 } @empty {
-                  <p class="py-6 text-center text-sm text-slate-500">Aún no hay fichas de reparación este mes.</p>
+                  <p class="py-6 text-center text-sm text-slate-500">Aún no hay fichas de reparación en este periodo.</p>
                 }
               </div>
             </section>
@@ -568,7 +655,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                     <div class="h-2.5 rounded-r-[4px] bg-[var(--serie-2)]" [style.width.%]="(pz.veces / topePieza()) * 100"></div>
                   </div>
                 } @empty {
-                  <p class="py-6 text-center text-sm text-slate-500">No se registraron piezas cambiadas este mes.</p>
+                  <p class="py-6 text-center text-sm text-slate-500">No se registraron piezas cambiadas en este periodo.</p>
                 }
               </div>
             </section>
@@ -590,7 +677,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                         <td class="max-w-56 truncate text-sm" [title]="r.ultima_falla">{{ r.ultima_falla }}</td>
                       </tr>
                     } @empty {
-                      <tr><td colspan="5" class="py-6 text-center text-sm text-slate-500">Ninguna PC se reparó más de una vez este mes.</td></tr>
+                      <tr><td colspan="5" class="py-6 text-center text-sm text-slate-500">Ninguna PC se reparó más de una vez en este periodo.</td></tr>
                     }
                   </tbody>
                 </table>
@@ -620,7 +707,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                         </td>
                       </tr>
                     } @empty {
-                      <tr><td colspan="3" class="py-6 text-center text-sm text-slate-500">Nadie usó "Otra" este mes.</td></tr>
+                      <tr><td colspan="3" class="py-6 text-center text-sm text-slate-500">Nadie usó "Otra" en este periodo.</td></tr>
                     }
                   </tbody>
                 </table>
@@ -628,38 +715,10 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
             </section>
           </div>
         }
+        }
 
-        <!-- OBJETOS PERDIDOS -->
-        <section class="tarjeta mb-5 p-4">
-          <h3 class="flex items-center gap-2 font-semibold"><app-icono nombre="objeto" [tamano]="17" /> Objetos perdidos</h3>
-          <p class="mb-3 text-xs text-slate-500">
-            <b class="text-slate-700">{{ x.objetos.registrados }}</b> encontrados este mes ·
-            <b class="text-slate-700">{{ x.objetos.entregados }}</b> entregados ·
-            <b class="text-slate-700">{{ x.objetos.en_custodia }}</b> en custodia ahora
-          </p>
-          <div class="space-y-2">
-            @for (l of x.objetos.por_lab; track l.codigo) {
-              <div class="grid grid-cols-[4.5rem_1fr_2rem] items-center gap-3">
-                <span class="flex items-center gap-1.5 text-sm font-semibold"><span class="h-3 w-1 rounded-full" [style.background]="l.color"></span>{{ l.codigo }}</span>
-                <span class="h-2.5 rounded-r-[4px] bg-[var(--serie-1)]" [style.width.%]="(l.objetos / topeObjetos()) * 100"></span>
-                <span class="text-right text-sm font-semibold tabular-nums">{{ l.objetos }}</span>
-              </div>
-            } @empty {
-              <p class="py-2 text-sm text-slate-500">No se registraron objetos este mes.</p>
-            }
-          </div>
-        </section>
-      }
-    } @else {
-      <p class="tarjeta p-10 text-center text-sm text-slate-500">{{ cargando() ? 'Cargando…' : 'Sin datos.' }}</p>
-    }
-
-    <!-- USO DE LABORATORIOS (admin y encargado) -->
+        @case ('uso') {
     @if (uso(); as u) {
-      <div class="mt-8 mb-4 border-t border-slate-200 pt-6">
-        <h2 class="flex items-center gap-2 text-xl font-bold"><app-icono nombre="laboratorio" [tamano]="20" /> Uso de laboratorios</h2>
-        <p class="mt-0.5 text-sm text-slate-600">Qué materias, carreras, docentes y eventos ocupan más los laboratorios, en qué días y horas, y qué piden más a los auxiliares en el mes.</p>
-      </div>
 
       <div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         <div class="tarjeta p-3">
@@ -680,7 +739,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
         <div class="tarjeta p-3">
           <p class="text-xs text-slate-500">Laboratorio más usado</p>
           <p class="text-3xl font-bold">{{ labMasUsado()?.codigo ?? '—' }}</p>
-          <p class="text-xs text-slate-500">{{ labMasUsado() ? (totalLab(labMasUsado()!) | number: '1.0-0') + ' h en el mes' : 'Sin uso' }}</p>
+          <p class="text-xs text-slate-500">{{ labMasUsado() ? (totalLab(labMasUsado()!) | number: '1.0-0') + ' h en el periodo' : 'Sin uso' }}</p>
         </div>
       </div>
 
@@ -693,12 +752,12 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
         <div class="mb-5 grid gap-5 lg:grid-cols-2 [&>*]:min-w-0">
           <section class="tarjeta p-4">
             <h3 class="font-semibold">Uso por día de la semana</h3>
-            <p class="mb-3 text-xs text-slate-500">Horas en todo el mes</p>
+            <p class="mb-3 text-xs text-slate-500">Horas en todo el periodo</p>
             <app-grafico-barras [etiquetas]="diasCortos" [titulos]="diasLargos" [series]="seriesUso(x.uso_por_dia_semana)" unidad=" h" [alto]="200" />
           </section>
           <section class="tarjeta p-4">
             <h3 class="font-semibold">Horas pico</h3>
-            <p class="mb-3 text-xs text-slate-500">Horas de laboratorio usadas en cada franja del día (todo el mes)</p>
+            <p class="mb-3 text-xs text-slate-500">Horas de laboratorio usadas en cada franja del día (todo el periodo)</p>
             <app-grafico-barras [etiquetas]="horasCortas(x.uso_por_hora)" [titulos]="horasLargas(x.uso_por_hora)" [series]="seriesUso(x.uso_por_hora)" unidad=" h" [alto]="200" />
           </section>
         </div>
@@ -724,7 +783,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                 <div class="h-2.5 rounded-r-[4px]" [style.background]="colorClase" [style.width.%]="(m.horas / topeMateria()) * 100"></div>
               </div>
             } @empty {
-              <p class="py-6 text-center text-sm text-slate-500">Sin clases este mes.</p>
+              <p class="py-6 text-center text-sm text-slate-500">Sin clases en este periodo.</p>
             }
           </div>
         </section>
@@ -746,7 +805,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                 <div class="h-2.5 rounded-r-[4px]" [style.background]="colorEvento" [style.width.%]="(e.horas / topeEvento()) * 100"></div>
               </div>
             } @empty {
-              <p class="py-6 text-center text-sm text-slate-500">Sin eventos este mes.</p>
+              <p class="py-6 text-center text-sm text-slate-500">Sin eventos en este periodo.</p>
             }
           </div>
         </section>
@@ -772,7 +831,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                   <div class="h-2.5 rounded-r-[4px]" [style.background]="colorClase" [style.width.%]="(c.horas / topeCarrera()) * 100"></div>
                 </div>
               } @empty {
-                <p class="py-6 text-center text-sm text-slate-500">Sin clases este mes.</p>
+                <p class="py-6 text-center text-sm text-slate-500">Sin clases en este periodo.</p>
               }
             </div>
           </section>
@@ -794,7 +853,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                   <div class="h-2.5 rounded-r-[4px]" [style.background]="colorClase" [style.width.%]="(dc.horas / topeDocente()) * 100"></div>
                 </div>
               } @empty {
-                <p class="py-6 text-center text-sm text-slate-500">Sin clases este mes.</p>
+                <p class="py-6 text-center text-sm text-slate-500">Sin clases en este periodo.</p>
               }
             </div>
           </section>
@@ -830,7 +889,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                   @if (l.evento) { <span class="h-full first:rounded-l-[2px] last:rounded-r-[4px]" [style.background]="colorEvento" [style.flex-grow]="l.evento"></span> }
                 </span>
               } @else {
-                <span class="text-xs text-slate-400">Sin uso este mes</span>
+                <span class="text-xs text-slate-400">Sin uso en este periodo</span>
               }
               <span class="truncate text-right text-xs text-slate-500">
                 <b class="text-slate-700 tabular-nums">{{ totalLab(l) | number: '1.0-0' }} h</b>{{ l.materia_top ? ' · ' + l.materia_top : '' }}
@@ -844,7 +903,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
         <!-- ACTIVIDADES DE AUXILIARES POR LAB -->
         <section class="tarjeta p-4">
           <h3 class="font-semibold">Qué hacen los auxiliares en cada laboratorio</h3>
-          <p class="mb-3 text-xs text-slate-500">Tickets del mes por tipo, del laboratorio con más trabajo al de menos</p>
+          <p class="mb-3 text-xs text-slate-500">Tickets del periodo por tipo, del laboratorio con más trabajo al de menos</p>
           <div class="space-y-3">
             @for (l of u.actividades_lab; track l.codigo) {
               <div>
@@ -859,7 +918,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                 </div>
               </div>
             } @empty {
-              <p class="py-6 text-center text-sm text-slate-500">Sin tickets en laboratorios este mes.</p>
+              <p class="py-6 text-center text-sm text-slate-500">Sin tickets en laboratorios en este periodo.</p>
             }
           </div>
         </section>
@@ -895,13 +954,19 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
                     <td class="text-sm whitespace-nowrap text-slate-500">{{ p.ultimo | date: 'dd/MM HH:mm' }}</td>
                   </tr>
                 } @empty {
-                  <tr><td colspan="6" class="py-6 text-center text-sm text-slate-500">{{ soloPeticiones() ? 'Sin pedidos de docentes este mes.' : 'Sin tickets este mes.' }}</td></tr>
+                  <tr><td colspan="6" class="py-6 text-center text-sm text-slate-500">{{ soloPeticiones() ? 'Sin pedidos de docentes en este periodo.' : 'Sin tickets en este periodo.' }}</td></tr>
                 }
               </tbody>
             </table>
           </div>
         </section>
       </div>
+    }
+          @else { <p class="tarjeta p-10 text-center text-sm text-slate-500">{{ cargando() ? 'Cargando…' : 'Sin datos de uso.' }}</p> }
+        }
+      }
+    } @else {
+      <p class="tarjeta p-10 text-center text-sm text-slate-500">{{ cargando() ? 'Cargando…' : 'Sin datos.' }}</p>
     }
 
     <!-- Tooltip -->
@@ -925,6 +990,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
 })
 export class DesempenoComponent implements OnInit {
   protected readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly supabase = inject(SupabaseService);
   private readonly op = inject(OperacionService);
   private readonly notificaciones = inject(NotificacionesService);
@@ -935,6 +1001,34 @@ export class DesempenoComponent implements OnInit {
   protected readonly mesActual = hoyIso().slice(0, 7);
 
   protected readonly mes = signal(this.mesActual);
+  /** Por mes, o entre dos fechas cualquiera */
+  protected readonly modo = signal<'mes' | 'rango'>('mes');
+  protected readonly desde = signal(sumarDias(hoyIso(), -6));
+  protected readonly hasta = signal(hoyIso());
+  protected readonly atajos = [
+    { texto: 'Últimos 7 días', dias: 7 },
+    { texto: '30 días', dias: 30 },
+    { texto: '90 días', dias: 90 },
+  ];
+  protected readonly errorRango = computed(() => {
+    if (!this.desde() || !this.hasta()) return 'Elija las dos fechas.';
+    if (this.hasta() < this.desde()) return 'La fecha «hasta» debe ser posterior a «desde».';
+    const dias = (Date.parse(this.hasta()) - Date.parse(this.desde())) / 86_400_000 + 1;
+    return dias > MAXIMO_DIAS ? 'El rango puede ser de hasta un año.' : '';
+  });
+  /** Periodo que se consultó (el que muestran los datos) */
+  protected readonly periodo = signal(rangoMes(this.mesActual));
+  protected readonly textoPeriodo = computed(() => {
+    const { desde, hasta } = this.periodo();
+    return this.modo() === 'mes'
+      ? `Tickets, auxiliares, PCs y uso de laboratorios de ${new Date(desde + 'T00:00:00').toLocaleDateString('es-BO', { month: 'long', year: 'numeric' })}.`
+      : `Del ${fechaCorta(desde)} al ${fechaCorta(hasta)}.`;
+  });
+
+  /** Sección abierta, desde la URL (?seccion=pcs) */
+  readonly seccionUrl = input<string>(undefined, { alias: 'seccion' });
+  protected readonly secciones = SECCIONES;
+  protected readonly seccion = computed<Seccion>(() => SECCIONES.find((s) => s.clave === this.seccionUrl())?.clave ?? 'resumen');
   protected readonly datos = signal<Dashboard | null>(null);
   protected readonly cargando = signal(false);
   protected readonly tip = signal<Tooltip | null>(null);
@@ -1034,6 +1128,25 @@ export class DesempenoComponent implements OnInit {
   protected readonly topeLab = computed(() => Math.max(1, ...(this.datos()?.por_lab ?? []).map((l) => l.pcs.total)));
   protected readonly diasConTrabajo = computed(() => (this.datos()?.por_dia ?? []).filter((p) => p.tickets).length);
 
+  /** Indicadores de las otras áreas para el resumen (cada uno lleva a su sección) */
+  protected readonly resumenExtra = computed(() => {
+    const x = this.detalle();
+    const u = this.uso();
+    const f = this.fallas();
+    const lista: { titulo: string; valor: string | number; nota: string; seccion: Seccion; alerta?: boolean }[] = [];
+    if (x) {
+      lista.push({ titulo: 'Cierres a tiempo', valor: `${this.pctATiempo()}%`, nota: `${x.cierres.total} cierres de turno`, seccion: 'auxiliares' });
+      lista.push({ titulo: 'Cierres con retraso', valor: x.cierres.con_retraso, nota: x.cierres.retraso_promedio ? `prom. ${this.retraso(x.cierres.retraso_promedio)}` : 'sin retrasos', seccion: 'auxiliares', alerta: x.cierres.con_retraso > 0 });
+    }
+    if (u) {
+      lista.push({ titulo: 'Horas de clase', valor: Math.round(u.totales.horas_clase), nota: `${u.totales.materias} materias`, seccion: 'uso' });
+      lista.push({ titulo: 'Lab. más usado', valor: this.labMasUsado()?.codigo ?? '—', nota: this.labMasUsado() ? `${Math.round(this.totalLab(this.labMasUsado()!))} h` : 'sin uso', seccion: 'uso' });
+    }
+    if (f) lista.push({ titulo: 'PCs reincidentes', valor: f.reincidentes.length, nota: `${f.total} reparaciones`, seccion: 'pcs', alerta: f.reincidentes.length > 0 });
+    if (x) lista.push({ titulo: 'PCs dadas de baja', valor: x.bajas.length, nota: `${x.objetos.en_custodia} objetos en custodia`, seccion: 'pcs', alerta: x.bajas.length > 0 });
+    return lista;
+  });
+
   ngOnInit(): void {
     void this.cargar();
   }
@@ -1044,14 +1157,41 @@ export class DesempenoComponent implements OnInit {
     void this.cargar();
   }
 
+  protected usarMes(): void {
+    this.modo.set('mes');
+    void this.cargar();
+  }
+
+  protected usarRango(): void {
+    // Arranca con el periodo que se está viendo
+    this.desde.set(this.periodo().desde);
+    this.hasta.set(this.periodo().hasta > hoyIso() ? hoyIso() : this.periodo().hasta);
+    this.modo.set('rango');
+  }
+
+  /** Últimos N días hasta hoy */
+  protected aplicarAtajo(dias: number): void {
+    this.hasta.set(hoyIso());
+    this.desde.set(sumarDias(hoyIso(), -(dias - 1)));
+    void this.cargar();
+  }
+
+  /** Abre una sección y la deja en la URL (el botón atrás vuelve a la anterior) */
+  protected irA(seccion: Seccion): void {
+    this.tip.set(null);
+    void this.router.navigate([], { queryParams: { seccion: seccion === 'resumen' ? null : seccion } });
+  }
+
   protected moverMes(delta: number): void {
     const [a, m] = this.mes().split('-').map(Number);
     const f = new Date(a, m - 1 + delta, 1);
     this.cambiarMes(`${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, '0')}`);
   }
 
-  private async cargar(): Promise<void> {
-    const { desde, hasta } = rangoMes(this.mes());
+  protected async cargar(): Promise<void> {
+    if (this.modo() === 'rango' && this.errorRango()) return;
+    const { desde, hasta } = this.modo() === 'mes' ? rangoMes(this.mes()) : { desde: this.desde(), hasta: this.hasta() };
+    this.periodo.set({ desde, hasta });
     this.cargando.set(true);
     void this.cargarUso(desde, hasta);
     void this.cargarDetalle(desde, hasta);
@@ -1149,7 +1289,7 @@ export class DesempenoComponent implements OnInit {
   protected verTipLab(e: MouseEvent, l: Dashboard['por_lab'][number]): void {
     this.verTip(e, l.codigo, [
       ...ESTADOS_PC.map((s) => ({ texto: s.texto, valor: l.pcs[s.clave] })),
-      { texto: 'Tickets del mes', valor: l.tickets },
+      { texto: 'Tickets del periodo', valor: l.tickets },
       { texto: 'Sin resolver', valor: l.pendientes },
     ]);
   }
@@ -1181,7 +1321,8 @@ export class DesempenoComponent implements OnInit {
       a.nombre, a.turno ? TURNOS[a.turno] : '', a.participaciones, a.registrados, a.trabajos,
       a.colaboraciones, a.resueltos, a.pcs_atendidas, a.reportes, a.tareas_hechas,
     ]);
-    descargarCsv(`desempeno-${this.mes()}`,
+    const { desde, hasta } = this.periodo();
+    descargarCsv(this.modo() === 'mes' ? `desempeno-${this.mes()}` : `desempeno-${desde}-a-${hasta}`,
       ['Auxiliar', 'Turno', 'Participó', 'Registró', 'Trabajos', 'Colaboró', 'Resolvió', 'PCs atendidas', 'Reportes de turno', 'Tareas hechas'], filas);
   }
 }

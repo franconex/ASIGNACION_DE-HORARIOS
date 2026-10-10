@@ -26,6 +26,12 @@ import { CATEGORIAS_EVENTO } from './reserva-form.component';
         <option [ngValue]="true">Próximas</option>
         <option [ngValue]="false">Todas</option>
       </select>
+      <select class="campo !w-auto" [ngModel]="orden()" (ngModelChange)="orden.set($event)" aria-label="Ordenar">
+        <option value="proxima">Fecha más próxima</option>
+        <option value="lejana">Fecha más lejana</option>
+        <option value="recientes">Registradas recientemente</option>
+        <option value="nombre">Nombre (A-Z)</option>
+      </select>
       <div class="relative min-w-52 flex-1">
         <app-icono nombre="buscar" [tamano]="16" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
         <input maxlength="60" class="campo !pl-9" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)" placeholder="Nombre o responsable">
@@ -96,14 +102,22 @@ export class ReservasListaComponent {
   protected readonly tipoId = signal(0);
   protected readonly soloProximas = signal(true);
   protected readonly busqueda = signal('');
+  protected readonly orden = signal<'proxima' | 'lejana' | 'recientes' | 'nombre'>('proxima');
 
   protected readonly filtradas = computed(() => {
     const hoy = hoyIso();
     const texto = this.busqueda().trim().toLowerCase();
-    return this.reservas().filter((r) =>
+    const lista = this.reservas().filter((r) =>
       (!this.tipoId() || r.tipo_id === this.tipoId()) &&
       (!this.soloProximas() || (r.horarios ?? []).some((h) => h.fecha >= hoy)) &&
       (!texto || `${r.titulo} ${r.responsable ?? ''} ${r.categoria ?? ''}`.toLowerCase().includes(texto)));
+    const primera = (r: Reserva) => { const h = this.horariosOrdenados(r)[0]; return h ? h.fecha + h.hora_inicio : ''; };
+    switch (this.orden()) {
+      case 'proxima': return lista.sort((a, b) => primera(a).localeCompare(primera(b)));
+      case 'lejana': return lista.sort((a, b) => primera(b).localeCompare(primera(a)));
+      case 'nombre': return lista.sort((a, b) => a.titulo.localeCompare(b.titulo, 'es'));
+      default: return lista.sort((a, b) => b.id - a.id);
+    }
   });
 
   constructor() {

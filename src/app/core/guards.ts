@@ -8,7 +8,17 @@ export const exigirSesion: CanActivateFn = async () => {
   const router = inject(Router);
   await auth.inicializar();
   if (!auth.perfil()?.activo) return router.createUrlTree(['/login']);
-  return auth.esInvitado() ? router.createUrlTree(['/espera']) : true;
+  if (auth.esInvitado()) return router.createUrlTree(['/espera']);
+  return auth.debeCompletarCuenta() ? router.createUrlTree(['/completar-cuenta']) : true;
+};
+
+/** Pantalla para poner nombre y contraseña: solo para quien recién recibió un rol */
+export const exigirCuentaPendiente: CanActivateFn = async () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  await auth.inicializar();
+  if (!auth.perfil()?.activo) return router.createUrlTree(['/login']);
+  return auth.debeCompletarCuenta() ? true : router.createUrlTree(['/']);
 };
 
 /** Pantalla de espera: solo para el invitado (sin rol todavía) */
