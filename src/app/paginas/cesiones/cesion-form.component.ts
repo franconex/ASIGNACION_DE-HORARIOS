@@ -141,6 +141,10 @@ const SELECT_ASIGNACION =
       </div>
 
       <footer class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-6 py-3">
+        @if (id()) {
+          <button class="btn-secundario !border-red-300 !text-red-600 mr-auto" (click)="eliminar()" [disabled]="guardando()">
+            <app-icono nombre="eliminar" [tamano]="16" /> Eliminar</button>
+        }
         <button class="btn-secundario" (click)="paneles.cerrar()">Cancelar</button>
         <button class="btn-primario" [disabled]="!puedeGuardar() || guardando()" (click)="guardar()">
           <app-icono nombre="ceder" [tamano]="16" /> {{ guardando() ? 'Guardando…' : 'Ceder ' + fechas().length + (fechas().length === 1 ? ' día' : ' días') }}
@@ -426,4 +430,20 @@ export class CesionFormComponent implements OnInit {
   }
 
   protected fechaCorta = fechaCorta;
+
+  /** Elimina por completo lo que se está editando (por si se cargó mal) */
+  protected async eliminar(): Promise<void> {
+    const id = this.id();
+    if (!id || !confirm('¿Eliminar esta cesión con todas sus fechas?\n\nEl docente vuelve a su laboratorio esos días.')) return;
+    this.guardando.set(true);
+    try {
+      await this.ocupacion.eliminarCesion(id);
+      this.notificaciones.exito('Cesión eliminada.');
+      this.paneles.guardado();
+    } catch (e) {
+      this.notificaciones.error(e, 'No se eliminó');
+    } finally {
+      this.guardando.set(false);
+    }
+  }
 }

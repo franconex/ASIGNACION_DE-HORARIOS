@@ -243,6 +243,10 @@ type Destino =
       </div>
 
       <footer class="flex justify-end gap-2 border-t border-slate-200 bg-superficie px-6 py-3">
+        @if (id()) {
+          <button class="btn-secundario !border-red-300 !text-red-600 mr-auto" (click)="eliminar()" [disabled]="guardando()">
+            <app-icono nombre="eliminar" [tamano]="16" /> Eliminar</button>
+        }
         <button class="btn-secundario" (click)="paneles.cerrar()">Cancelar</button>
         <button class="btn-primario" [disabled]="!puedeGuardar() || guardando()" (click)="guardar()">
           <app-icono nombre="check" [tamano]="16" /> {{ guardando() ? 'Guardando…' : 'Guardar' }}
@@ -617,6 +621,22 @@ export class ReservaFormComponent implements OnInit {
       this.paneles.guardado();
     } catch (e) {
       this.notificaciones.error(e, 'No se guardó');
+    } finally {
+      this.guardando.set(false);
+    }
+  }
+
+  /** Elimina por completo lo que se está editando (por si se cargó mal) */
+  protected async eliminar(): Promise<void> {
+    const id = this.id();
+    if (!id || !confirm(`¿Eliminar "${this.titulo() || 'este evento'}" con todos sus días?\n\nLas clases que movió vuelven a su laboratorio.`)) return;
+    this.guardando.set(true);
+    try {
+      await this.ocupacion.eliminarReserva(id);
+      this.notificaciones.exito('Evento eliminado.');
+      this.paneles.guardado();
+    } catch (e) {
+      this.notificaciones.error(e, 'No se eliminó');
     } finally {
       this.guardando.set(false);
     }

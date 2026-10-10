@@ -90,13 +90,19 @@ import { ModalComponent } from './modal.component';
                   <app-icono nombre="evento" [tamano]="15" /> Evento aquí</button>
                 <button class="btn-secundario !border-purple-300 !text-purple-700" (click)="ceder(o)">
                   <app-icono nombre="ceder" [tamano]="15" /> Ceder</button>
+                <button class="btn-secundario !border-red-300 !text-red-600" (click)="eliminar(o)" [disabled]="guardando()" title="Borra la asignación completa (todos sus días y horarios)">
+                  <app-icono nombre="eliminar" [tamano]="15" /> Eliminar</button>
                 <button class="btn-primario" (click)="editar(o)"><app-icono nombre="editar" [tamano]="15" /> Editar</button>
               }
             }
             @if (o.origen === 'cesion') {
+              <button class="btn-secundario !border-red-300 !text-red-600" (click)="eliminar(o)" [disabled]="guardando()">
+                <app-icono nombre="eliminar" [tamano]="15" /> Eliminar cesión</button>
               <button class="btn-primario" (click)="editar(o)"><app-icono nombre="editar" [tamano]="15" /> Editar cesión</button>
             }
             @if (o.origen === 'reserva') {
+              <button class="btn-secundario !border-red-300 !text-red-600" (click)="eliminar(o)" [disabled]="guardando()" title="Borra el evento completo (todos sus días)">
+                <app-icono nombre="eliminar" [tamano]="15" /> Eliminar</button>
               <button class="btn-primario" (click)="editar(o)"><app-icono nombre="editar" [tamano]="15" /> Editar</button>
             }
           } @else {
@@ -226,6 +232,30 @@ export class OcupacionDetalleComponent {
       ambienteId: o.ambiente_id, fecha: o.fecha, horaInicio: hhmm(o.hora_inicio), horaFin: hhmm(o.hora_fin),
       tipoId: this.catalogos.tiposReserva().find((t) => t.codigo === 'EVENTO')?.id,
     });
+  }
+
+  /** Elimina por completo la asignación, cesión o evento (por si se cargó mal) */
+  protected async eliminar(o: Ocupacion): Promise<void> {
+    const pregunta = o.origen === 'clase'
+      ? `¿Eliminar la asignación completa de "${o.titulo}"?\n\nSe borran TODOS sus días y horarios (no solo este), con sus cesiones y reubicaciones. Si solo es este día, use "Reubicar / suspender".`
+      : o.origen === 'cesion'
+        ? `¿Eliminar esta cesión con todas sus fechas?\n\nEl docente vuelve a su laboratorio esos días.`
+        : `¿Eliminar el evento "${o.titulo}" con todos sus días?\n\nLas clases que movió vuelven a su laboratorio.`;
+    if (!confirm(pregunta)) return;
+    this.guardando.set(true);
+    try {
+      if (o.origen === 'clase' && o.asignacion_id) await this.ocupacionServicio.eliminarAsignacion(o.asignacion_id);
+      else if (o.origen === 'cesion' && o.cesion_id) await this.ocupacionServicio.eliminarCesion(o.cesion_id);
+      else if (o.origen === 'reserva' && o.reserva_id) await this.ocupacionServicio.eliminarReserva(o.reserva_id);
+      this.notificaciones.exito(o.origen === 'clase' ? 'Asignación eliminada.' : o.origen === 'cesion' ? 'Cesión eliminada.' : 'Evento eliminado.');
+      this.cambio.emit();
+      this.paneles.notificarCambio();
+      this.cerrar.emit();
+    } catch (e) {
+      this.notificaciones.error(e, 'No se eliminó');
+    } finally {
+      this.guardando.set(false);
+    }
   }
 
   /** Cierra el detalle y abre el formulario que corresponde (asignación, cesión o reserva) */

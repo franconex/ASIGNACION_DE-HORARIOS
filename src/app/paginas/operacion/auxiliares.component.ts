@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IconoComponent } from '../../compartido/icono.component';
 import { ModalComponent } from '../../compartido/modal.component';
@@ -7,7 +7,7 @@ import { CATEGORIAS_FALLA } from '../../core/tickets';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { OperacionService, turnosDeHoy } from '../../core/operacion.service';
 import { environment } from '../../../environments/environment';
-import { aMinutos, fechaActual, fechaCorta, hhmm } from '../../core/fechas';
+import { aMinutos, fechaActual, fechaCorta, fechaLarga, hhmm } from '../../core/fechas';
 
 const NOMBRE_TURNO: Record<string, string> = { M: 'Mañana', MD: 'Mediodía', T: 'Tarde', N: 'Noche' };
 
@@ -172,6 +172,43 @@ const NOMBRE_TURNO: Record<string, string> = { M: 'Mañana', MD: 'Mediodía', T:
       <p class="px-3 py-2 text-xs text-slate-400">Para crear o desactivar cuentas, usa Configuración → Usuarios (solo admin).</p>
     </div>
 
+    <!-- ASIGNACIONES DE TURNO GUARDADAS: para corregir o borrar una que se puso mal -->
+    <section class="mb-8">
+      <h2 class="mb-1 text-lg font-semibold">Asignaciones de turno</h2>
+      <p class="mb-2 text-sm text-slate-600">Cada vez que guardas turnos queda una asignación con su fecha de inicio. Si te equivocaste, bórrala completa o quita solo a una persona: vuelve a valer el turno que tenía antes.</p>
+      <div class="space-y-2">
+        @for (g of asignaciones(); track g.desde) {
+          <article class="tarjeta p-3">
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p class="font-semibold">
+                <span class="capitalize">Desde el {{ fechaLarga(g.desde) }}</span>
+                <span class="chip ml-1" [class]="g.estado === 'vigente' ? 'bg-emerald-100 text-emerald-700' : g.estado === 'proxima' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-600'">
+                  {{ g.estado === 'vigente' ? 'Vigente' : g.estado === 'proxima' ? 'Próxima' : 'Anterior' }}
+                </span>
+                <span class="ml-1 text-xs font-normal text-slate-500">{{ g.turnos.length }} persona(s)</span>
+              </p>
+              <button class="btn-secundario btn-sm !border-red-200 !text-red-600" (click)="eliminarAsignacion(g.desde, g.turnos)" [disabled]="guardando()">
+                <app-icono nombre="eliminar" [tamano]="15" /> Eliminar toda la asignación
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              @for (t of g.turnos; track t.id) {
+                <span class="chip gap-1 bg-slate-100 py-1 text-slate-700">
+                  {{ t.perfil?.nombre_completo || '¿?' }} · <b>{{ nombreTurno[t.turno] }}</b>
+                  <button class="ml-0.5 rounded-full p-0.5 text-red-600 hover:bg-red-100" (click)="eliminarTurno(t)" [disabled]="guardando()"
+                          [attr.aria-label]="'Quitar a ' + (t.perfil?.nombre_completo || 'esta persona') + ' de esta asignación'" title="Quitar solo a esta persona">
+                    <app-icono nombre="eliminar" [tamano]="13" />
+                  </button>
+                </span>
+              }
+            </div>
+          </article>
+        } @empty {
+          <p class="tarjeta py-6 text-center text-sm text-slate-500">Aún no hay turnos asignados.</p>
+        }
+      </div>
+    </section>
+
     <!-- ROTACIÓN DE SÁBADOS: uno o varios auxiliares por sábado, cada uno con su turno -->
     <section>
       <h2 class="mb-1 text-lg font-semibold">Turnos de sábado</h2>
@@ -253,6 +290,21 @@ export class AuxiliaresComponent implements OnInit {
   protected readonly elegidos = signal<Record<string, TurnoCodigo>>({});
 
   protected readonly fechaCorta = fechaCorta;
+  protected readonly fechaLarga = fechaLarga;
+
+  /** Turnos guardados agrupados por fecha de inicio (la más nueva primero) */
+  protected readonly asignaciones = computed(() => {
+    const hoy = fechaActual(environment.zonaHoraria);
+    const mapa = new Map<string, TurnoProgramado[]>();
+    for (const t of this.turnosProgramados()) mapa.set(t.desde, [...(mapa.get(t.desde) ?? []), t]);
+    // Vigente = la fecha más reciente que ya empezó
+    const vigente = [...mapa.keys()].filter((d) => d <= hoy).sort().at(-1);
+    return [...mapa].sort(([a], [b]) => b.localeCompare(a)).map(([desde, turnos]) => ({
+      desde,
+      turnos: turnos.sort((x, y) => (x.perfil?.nombre_completo ?? '').localeCompare(y.perfil?.nombre_completo ?? '', 'es')),
+      estado: desde > hoy ? 'proxima' : desde === vigente ? 'vigente' : 'anterior',
+    }));
+  });
   /** Sábado que se está cargando: uno o varios auxiliares con el mismo turno */
   protected nueva: { fecha: string; auxiliares: string[]; turno: TurnoCodigo | null; nota: string } =
     { fecha: '', auxiliares: [], turno: null, nota: '' };
@@ -367,6 +419,31 @@ export class AuxiliaresComponent implements OnInit {
       await this.cargar();
     } catch (e) {
       this.notificaciones.error(e, 'No se programó el turno');
+    } finally {
+      this.guardando.set(false);
+    }
+  }
+
+  /** Borra toda la asignación de una fecha (por si se guardó mal) */
+  protected async eliminarAsignacion(desde: string, turnos: TurnoProgramado[]): Promise<void> {
+    if (!confirm(`¿Eliminar toda la asignación desde el ${fechaLarga(desde)} (${turnos.length} persona(s))?\n\nCada uno vuelve al turno que tenía antes de esa fecha.`)) return;
+    await this.borrarTurnos(turnos.map((t) => t.id), 'Asignación eliminada.');
+  }
+
+  /** Quita solo a una persona de una asignación */
+  protected async eliminarTurno(t: TurnoProgramado): Promise<void> {
+    if (!confirm(`¿Quitar a ${t.perfil?.nombre_completo || 'esta persona'} de la asignación del ${fechaLarga(t.desde)}?\n\nVuelve al turno que tenía antes de esa fecha.`)) return;
+    await this.borrarTurnos([t.id], 'Turno quitado.');
+  }
+
+  private async borrarTurnos(ids: number[], mensaje: string): Promise<void> {
+    this.guardando.set(true);
+    try {
+      await this.op.eliminarTurnosProgramados(ids);
+      this.notificaciones.exito(mensaje);
+      await this.cargar();
+    } catch (e) {
+      this.notificaciones.error(e, 'No se eliminó');
     } finally {
       this.guardando.set(false);
     }

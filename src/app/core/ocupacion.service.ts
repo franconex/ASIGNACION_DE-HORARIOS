@@ -2,7 +2,7 @@ import { inject, Injectable } from '@angular/core';
 import {
   Ambiente, CandidatoChoque, Choque, Conflicto, EstadoVivoAmbiente, IgnorarChoque, Ocupacion,
 } from './modelos';
-import { SupabaseService } from './supabase.service';
+import { ErrorSistema, SupabaseService } from './supabase.service';
 
 /**
  * Acceso a las funciones de ocupación, choques y guardado (RPC de Supabase).
@@ -51,6 +51,29 @@ export class OcupacionService {
   /** Guarda una asignación completa con sus horarios */
   guardarAsignacion(datos: object): Promise<number> {
     return this.supabase.rpc<number>('rpc_guardar_asignacion', { p: datos });
+  }
+
+  // ----- Eliminar (por si se cargó mal): se borra todo lo que cuelga de ella -----
+
+  /** Elimina una asignación completa: todos sus horarios y fechas, con sus cesiones y reubicaciones */
+  async eliminarAsignacion(id: number): Promise<void> {
+    const { error } = await this.supabase.cliente.from('asignaciones').delete().eq('id', id);
+    if (error) throw new ErrorSistema(error);
+  }
+
+  /** Elimina un evento/reserva con todos sus días; las clases que movió vuelven a su laboratorio */
+  async eliminarReserva(id: number): Promise<void> {
+    const { error } = await this.supabase.cliente.from('reservas').delete().eq('id', id);
+    if (error) throw new ErrorSistema(error);
+  }
+
+  /** Elimina la cesión y las demás de su lote (los otros horarios cedidos junto con ella) */
+  async eliminarCesion(id: number): Promise<void> {
+    const { data, error: errorLote } = await this.supabase.cliente.from('cesiones').select('lote').eq('id', id).maybeSingle();
+    if (errorLote) throw new ErrorSistema(errorLote);
+    const consulta = this.supabase.cliente.from('cesiones').delete();
+    const { error } = await (data?.lote ? consulta.eq('lote', data.lote) : consulta.eq('id', id));
+    if (error) throw new ErrorSistema(error);
   }
 
   /** Guarda un lote de cesiones (uno o varios horarios, cada uno con sus fechas) */

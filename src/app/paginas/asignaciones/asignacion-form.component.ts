@@ -330,6 +330,10 @@ let contadorFilas = 0;
       <footer class="flex items-center justify-between gap-2 border-t border-slate-200 bg-slate-50 px-6 py-3">
         <p class="text-xs text-slate-500">{{ motivoNoGuardar() }}</p>
         <div class="flex gap-2">
+          @if (id()) {
+            <button class="btn-secundario !border-red-300 !text-red-600" (click)="eliminar()" [disabled]="guardando()">
+            <app-icono nombre="eliminar" [tamano]="16" /> Eliminar</button>
+          }
           <button class="btn-secundario" (click)="paneles.cerrar()">Cancelar</button>
           <button class="btn-primario" [disabled]="!puedeGuardar() || guardando()" (click)="guardar()">
             <app-icono nombre="check" [tamano]="16" /> {{ guardando() ? 'Guardando…' : 'Guardar' }}
@@ -914,5 +918,21 @@ export class AsignacionFormComponent implements OnInit {
       await this.supabase.cliente.from('docente_carreras').upsert({ docente_id: docenteId, carrera_id: this.facultadId() }, { ignoreDuplicates: true });
     }
     await this.catalogos.recargar('docentes');
+  }
+
+  /** Elimina por completo lo que se está editando (por si se cargó mal) */
+  protected async eliminar(): Promise<void> {
+    const id = this.id();
+    if (!id || !confirm('¿Eliminar esta asignación completa?\n\nSe borran todos sus días y horarios, con sus cesiones y reubicaciones.')) return;
+    this.guardando.set(true);
+    try {
+      await this.ocupacion.eliminarAsignacion(id);
+      this.notificaciones.exito('Asignación eliminada.');
+      this.paneles.guardado();
+    } catch (e) {
+      this.notificaciones.error(e, 'No se eliminó');
+    } finally {
+      this.guardando.set(false);
+    }
   }
 }

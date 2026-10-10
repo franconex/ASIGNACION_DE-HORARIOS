@@ -478,8 +478,10 @@ export class OperacionService {
     if (error) throw new ErrorSistema(error);
   }
 
-  async eliminarTurnoProgramado(id: number): Promise<void> {
-    const { error } = await this.cliente.from('turnos_programados').delete().eq('id', id);
+  /** Borra turnos programados (uno o toda una asignación de la misma fecha) */
+  async eliminarTurnosProgramados(ids: number[]): Promise<void> {
+    if (!ids.length) return;
+    const { error } = await this.cliente.from('turnos_programados').delete().in('id', ids);
     if (error) throw new ErrorSistema(error);
   }
 
