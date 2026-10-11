@@ -401,7 +401,7 @@ export class PanelDiaComponent implements OnDestroy {
     const ultimo = aIso(new Date(f.getFullYear(), f.getMonth() + 1, 0));
     try {
       const datos = await this.ocupacionServicio.ocupaciones(primero, ultimo);
-      this.diasEspeciales.set(new Set(datos.filter((o) => o.origen !== 'clase' || o.estado === 'reubicada').map((o) => o.fecha)));
+      this.diasEspeciales.set(new Set(datos.filter((o) => o.origen !== 'clase' || o.estado !== 'normal').map((o) => o.fecha)));
     } catch {
       this.diasEspeciales.set(new Set());
     }
@@ -476,7 +476,7 @@ export class PanelDiaComponent implements OnDestroy {
 
   protected colorOcupacion(o: Ocupacion): string {
     if (o.origen === 'reserva') return '#ea580c';
-    if (o.origen === 'cesion') return '#9333ea';
+    if (o.origen === 'cesion' || o.estado === 'cedida') return '#9333ea';
     return o.estado === 'reubicada' ? '#6b7fd6' : '#3a5bc4';
   }
 

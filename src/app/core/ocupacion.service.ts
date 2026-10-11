@@ -45,7 +45,13 @@ export class OcupacionService {
           materia: r.horario?.asignacion?.materia?.nombre ?? '',
           destino: r.destino?.codigo ?? r.aula_destino,
         }));
-      if (desplazadas.length) o.desplazadas = desplazadas;
+      if (!desplazadas.length) continue;
+      o.desplazadas = desplazadas;
+      // La clase que ocupa el laboratorio se muestra como un ambiente cedido
+      if (o.origen === 'clase') {
+        o.estado = 'cedida';
+        o.color = '#9333ea';
+      }
     }
     return ocupaciones;
   }

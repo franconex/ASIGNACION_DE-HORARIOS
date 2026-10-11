@@ -200,14 +200,14 @@ export class PanelSemanaComponent {
 
   protected colorOcupacion(o: Ocupacion): string {
     if (o.origen === 'reserva') return '#ea580c';
-    if (o.origen === 'cesion') return '#9333ea';
+    if (o.origen === 'cesion' || o.estado === 'cedida') return '#9333ea';
     return o.estado === 'reubicada' ? '#6b7fd6' : '#3a5bc4';
   }
 
   /** Segunda línea del bloque (docente de la clase, o a quién se cedió) */
   protected textoSecundario(o: Ocupacion): string {
     const partes = o.detalle.split(' · ');
-    if (o.origen === 'cesion') return `Cedido a ${partes[0]}`;
+    if (o.origen === 'cesion' || o.estado === 'cedida') return `Cedido a ${partes[0]}`;
     if (o.origen === 'reserva') return partes[0] ?? '';
     return partes[0] ?? '';
   }
