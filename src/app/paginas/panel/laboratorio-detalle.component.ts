@@ -10,7 +10,7 @@ import { DIAS_CORTOS, diaIso, fechaCorta, fechaLarga, hhmm, hoyIso, rangoFechas,
 import { Asignacion, BloqueHorario, Ocupacion } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { ConfirmacionService } from '../../core/confirmacion.service';
-import { OcupacionService } from '../../core/ocupacion.service';
+import { OcupacionService, textoDesplazada } from '../../core/ocupacion.service';
 import { PanelesService, PestanaLaboratorio } from '../../core/paneles.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
 
@@ -109,9 +109,10 @@ import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
                         @for (o of ocupacionesEn(d, b); track o.clave) {
                           <button class="mb-0.5 block w-full rounded border-l-[3px] px-1 py-0.5 text-left leading-tight hover:brightness-95"
                                   [style.border-left-color]="o.color" [style.background]="o.color + '1f'" (click)="seleccionada.set(o)"
-                                  [title]="o.titulo + ' · ' + o.detalle">
+                                  [title]="[o.titulo + ' · ' + o.detalle].concat((o.desplazadas ?? []).map(textoDesplazada)).join('\n')">
                             <span class="block truncate font-semibold">{{ o.titulo }}</span>
                             <span class="block truncate text-xs text-slate-500">{{ hhmm(o.hora_inicio) }}–{{ hhmm(o.hora_fin) }}</span>
+                            @for (dz of o.desplazadas ?? []; track $index) { <span class="block truncate text-xs text-purple-700">{{ textoDesplazada(dz) }}</span> }
                           </button>
                         } @empty {
                           @if (catalogos.conjuntoFeriados().has(d)) {
@@ -278,6 +279,8 @@ export class LaboratorioDetalleComponent {
     this.lunes.set(sumarDias(this.lunes(), dias));
     void this.cargar();
   }
+
+  protected readonly textoDesplazada = textoDesplazada;
 
   protected ocupacionesEn(fecha: string, b: BloqueHorario): Ocupacion[] {
     return this.ocupaciones().filter((o) => o.fecha === fecha && seSolapan(o.hora_inicio, o.hora_fin, b.hora_inicio, b.hora_fin));

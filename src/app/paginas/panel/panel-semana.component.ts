@@ -10,7 +10,7 @@ import {
 } from '../../core/fechas';
 import { Ambiente, BloqueHorario, Ocupacion } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
-import { OcupacionService } from '../../core/ocupacion.service';
+import { OcupacionService, textoDesplazada } from '../../core/ocupacion.service';
 import { PanelesService } from '../../core/paneles.service';
 
 /**
@@ -79,10 +79,11 @@ import { PanelesService } from '../../core/paneles.service';
                   @for (o of ocupacionesEn(d, b); track o.clave) {
                     <button class="mb-1 block w-full overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-left leading-tight transition hover:shadow-sm"
                             [style.border-left-color]="colorOcupacion(o)" [style.background]="colorOcupacion(o) + '1f'" (click)="seleccionada.set(o)"
-                            [title]="o.titulo + ' · ' + o.detalle">
+                            [title]="tituloOcupacion(o)">
                       <span class="block truncate text-sm font-semibold text-slate-800">{{ o.titulo }}</span>
                       <span class="block truncate text-xs text-slate-500 tabular-nums">{{ hhmm(o.hora_inicio) }}–{{ hhmm(o.hora_fin) }}</span>
                       @if (textoSecundario(o); as t) { <span class="block truncate text-xs text-slate-500">{{ t }}</span> }
+                      @for (dz of o.desplazadas ?? []; track $index) { <span class="block truncate text-xs text-purple-700">{{ textoDesplazada(dz) }}</span> }
                     </button>
                   } @empty {
                     @if (puedeAsignar(d, b)) {
@@ -189,6 +190,12 @@ export class PanelSemanaComponent {
 
   protected ocupacionesEn(fecha: string, b: BloqueHorario): Ocupacion[] {
     return this.ocupaciones().filter((o) => o.fecha === fecha && seSolapan(o.hora_inicio, o.hora_fin, b.hora_inicio, b.hora_fin));
+  }
+
+  protected readonly textoDesplazada = textoDesplazada;
+
+  protected tituloOcupacion(o: Ocupacion): string {
+    return [o.titulo + ' · ' + o.detalle, ...(o.desplazadas ?? []).map(textoDesplazada)].join('\n');
   }
 
   protected colorOcupacion(o: Ocupacion): string {

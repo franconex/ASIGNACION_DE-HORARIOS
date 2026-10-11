@@ -32,6 +32,16 @@ import { ModalComponent } from './modal.component';
             </div>
           </div>
 
+          <!-- Clases que ese día dejaron el laboratorio en este horario -->
+          @if (o.desplazadas?.length) {
+            <div class="rounded-lg border border-purple-200 bg-purple-50 p-3 text-sm text-purple-900">
+              <p class="mb-1 font-semibold">Este día el laboratorio fue cedido por:</p>
+              @for (dz of o.desplazadas; track $index) {
+                <p><b>{{ dz.docente }}</b> · {{ dz.materia }} → @if (dz.destino) { se va a <b>{{ dz.destino }}</b> } @else { <b>clase suspendida</b> }</p>
+              }
+            </div>
+          }
+
           <dl class="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm">
             <div><dt class="etiqueta">Ambiente</dt><dd class="font-medium">{{ catalogos.codigoAmbiente(o.ambiente_id) }}</dd></div>
             <div><dt class="etiqueta">Fecha</dt><dd class="font-medium capitalize">{{ fechaLarga(o.fecha) }}</dd></div>

@@ -455,6 +455,16 @@ export interface Ocupacion {
   color: string;
   prioridad: number;
   estado: string;
+  /** Clases que ese día dejaron este laboratorio en este horario (se calcula en el cliente) */
+  desplazadas?: ClaseDesplazada[];
+}
+
+/** Clase que un día se fue a otro laboratorio/aula (o se suspendió) porque su laboratorio estaba ocupado */
+export interface ClaseDesplazada {
+  docente: string;
+  materia: string;
+  /** Laboratorio o aula a la que se va; null = clase suspendida ese día */
+  destino: string | null;
 }
 
 /** Fila devuelta por fn_verificar_choques */

@@ -11,7 +11,7 @@ import {
 } from '../../core/fechas';
 import { Ambiente, Ocupacion } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
-import { OcupacionService } from '../../core/ocupacion.service';
+import { OcupacionService, textoDesplazada } from '../../core/ocupacion.service';
 import { PanelesService } from '../../core/paneles.service';
 import { TemaService } from '../../core/tema.service';
 
@@ -493,8 +493,9 @@ export class PanelDiaComponent implements OnDestroy {
       const titular = cedente.replace(/\s*\(se va a .+\)$/, '');
       return [o.titulo, receptor, aula ? `Cedido por ${titular} (→ ${aula})` : `Cedido por ${titular}`];
     }
-    if (o.origen === 'reserva') return [o.titulo, partes.slice(0, 2).join(', ')];
-    return [o.titulo, partes[0], partes.slice(1).join(', ')].filter(Boolean);
+    const cedidos = (o.desplazadas ?? []).map(textoDesplazada);
+    if (o.origen === 'reserva') return [o.titulo, partes.slice(0, 2).join(', '), ...cedidos];
+    return [o.titulo, partes[0], partes.slice(1).join(', '), ...cedidos].filter(Boolean);
   }
 
   protected etiquetaHora(minutos: number): string {
