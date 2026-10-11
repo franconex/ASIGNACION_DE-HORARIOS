@@ -144,6 +144,8 @@ export interface AsignacionHorario {
   hora_inicio: string;
   hora_fin: string;
   ambiente_id: number;
+  /** Relación embebida: días en que la clase va a otro laboratorio/aula o se suspende */
+  reubicaciones?: Pick<Reubicacion, 'fecha' | 'ambiente_destino_id' | 'aula_destino' | 'motivo'>[];
 }
 
 export interface Asignacion {

@@ -31,6 +31,33 @@ export function agruparHorarios(horarios: AsignacionHorario[]): GrupoHorario[] {
   return [...grupos.values()];
 }
 
+/** Días en que un horario de la clase va a otro lugar (mismo día, hora y destino) */
+export interface GrupoReubicacion {
+  dia: number;
+  horaInicio: string;
+  origenId: number;
+  /** Código del laboratorio, aula (texto) o null si la clase se suspende */
+  destino: string | null;
+  fechas: string[];
+  motivo: string;
+}
+
+/** Agrupa las reubicaciones de los horarios por (día, hora, destino) */
+export function agruparReubicaciones(horarios: AsignacionHorario[], codigoAmbiente: (id: number) => string, desde?: string): GrupoReubicacion[] {
+  const grupos = new Map<string, GrupoReubicacion>();
+  for (const h of [...horarios].sort((a, b) => a.dia_semana - b.dia_semana || a.hora_inicio.localeCompare(b.hora_inicio))) {
+    for (const r of [...(h.reubicaciones ?? [])].sort((a, b) => a.fecha.localeCompare(b.fecha))) {
+      if (desde && r.fecha < desde) continue;
+      const destino = r.ambiente_destino_id ? codigoAmbiente(r.ambiente_destino_id) : r.aula_destino;
+      const clave = `${h.id}|${destino ?? ''}`;
+      const grupo = grupos.get(clave) ?? { dia: h.dia_semana, horaInicio: h.hora_inicio, origenId: h.ambiente_id, destino, fechas: [], motivo: r.motivo };
+      grupo.fechas.push(r.fecha);
+      grupos.set(clave, grupo);
+    }
+  }
+  return [...grupos.values()];
+}
+
 /** Criterios de orden de la lista de asignaciones */
 type OrdenAsignaciones = 'inicio_asc' | 'inicio_desc' | 'recientes' | 'materia' | 'docente' | 'grupo';
 
@@ -74,7 +101,7 @@ type OrdenAsignaciones = 'inicio_asc' | 'inicio_desc' | 'recientes' | 'materia' 
       </select>
       <div class="relative min-w-52 flex-1">
         <app-icono nombre="buscar" [tamano]="16" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
-        <input maxlength="60" class="campo !pl-9" placeholder="Materia, docente o grupo" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
+        <input maxlength="60" class="campo !pl-9" placeholder="Materia, docente, grupo o aula" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
       </div>
       <button class="btn-secundario" (click)="exportar()" [disabled]="!filtradas().length" title="Exportar a Excel"><app-icono nombre="descargar" [tamano]="16" /> Excel</button>
       @if (auth.puedeEditar()) {
@@ -113,6 +140,14 @@ type OrdenAsignaciones = 'inicio_asc' | 'inicio_desc' | 'recientes' | 'materia' 
                     </span>
                   }
                 </div>
+                @for (r of reubicaciones(a); track $index) {
+                  <p class="mt-1 text-xs text-amber-800" [title]="r.motivo">
+                    <app-icono nombre="reubicar" [tamano]="12" class="inline align-[-2px]" />
+                    <b>{{ diasCortos[r.dia] }} {{ hhmm(r.horaInicio) }}</b> {{ catalogos.codigoAmbiente(r.origenId) }} →
+                    @if (r.destino) { <b>{{ r.destino }}</b> } @else { <b>suspendida</b> }
+                    <span class="text-slate-500">· {{ textoFechas(r.fechas) }}</span>
+                  </p>
+                }
               </td>
               <td class="text-right whitespace-nowrap">
                 @if (auth.puedeEditar()) {
@@ -141,6 +176,7 @@ export class AsignacionesListaComponent {
 
   protected readonly hhmm = hhmm;
   protected readonly fechaCorta = fechaCorta;
+  protected readonly diasCortos = DIAS_CORTOS;
 
   protected readonly sistemaId = signal(0);
   protected readonly soloVigentes = signal(true);
@@ -169,9 +205,10 @@ export class AsignacionesListaComponent {
     const lista = this.asignaciones().filter((a) =>
       (!this.sistemaId() || a.sistema_id === this.sistemaId()) &&
       (!this.carreraId() || a.carrera_id === this.carreraId()) &&
-      (!this.ambienteId() || (a.horarios ?? []).some((h) => h.ambiente_id === this.ambienteId())) &&
+      (!this.ambienteId() || (a.horarios ?? []).some((h) => h.ambiente_id === this.ambienteId() ||
+        (h.reubicaciones ?? []).some((r) => r.ambiente_destino_id === this.ambienteId()))) &&
       (!this.grupo() || a.grupo?.trim() === this.grupo()) &&
-      (!texto || `${a.materia?.nombre} ${a.docente?.apellidos} ${a.docente?.nombres} ${a.grupo ?? ''}`.toLowerCase().includes(texto)));
+      (!texto || `${a.materia?.nombre} ${a.docente?.apellidos} ${a.docente?.nombres} ${a.grupo ?? ''} ${this.textoBusquedaAulas(a)}`.toLowerCase().includes(texto)));
     const texto2 = (x?: string | null) => x ?? '';
     const docente = (a: Asignacion) => `${texto2(a.docente?.apellidos)} ${texto2(a.docente?.nombres)}`;
     const comparar: Record<OrdenAsignaciones, (a: Asignacion, b: Asignacion) => number> = {
@@ -196,7 +233,7 @@ export class AsignacionesListaComponent {
   protected async cargar(): Promise<void> {
     this.cargando.set(true);
     let consulta = this.supabase.cliente.from('asignaciones')
-      .select('*, docente:docentes(id,nombres,apellidos), materia:materias(id,nombre), carrera:carreras(id,nombre,sigla,color), horarios:asignacion_horarios(*), fechas:asignacion_fechas(fecha)');
+      .select('*, docente:docentes(id,nombres,apellidos), materia:materias(id,nombre), carrera:carreras(id,nombre,sigla,color), horarios:asignacion_horarios(*, reubicaciones(fecha, ambiente_destino_id, aula_destino, motivo)), fechas:asignacion_fechas(fecha)');
     if (this.soloVigentes()) consulta = consulta.gte('fecha_fin', hoyIso());
     const { data, error } = await consulta;
     this.cargando.set(false);
@@ -211,6 +248,22 @@ export class AsignacionesListaComponent {
 
   protected grupos(a: Asignacion): GrupoHorario[] {
     return agruparHorarios(a.horarios ?? []);
+  }
+
+  /** Reubicaciones de la clase (desde hoy si se ven solo las vigentes) */
+  protected reubicaciones(a: Asignacion): GrupoReubicacion[] {
+    return agruparReubicaciones(a.horarios ?? [], (id) => this.catalogos.codigoAmbiente(id), this.soloVigentes() ? hoyIso() : undefined);
+  }
+
+  /** Fechas cortas; si son muchas, la primera, la última y el total */
+  protected textoFechas(fechas: string[]): string {
+    if (fechas.length <= 4) return fechas.map(fechaCorta).join(', ');
+    return `${fechaCorta(fechas[0])} … ${fechaCorta(fechas[fechas.length - 1])} (${fechas.length} días)`;
+  }
+
+  /** Aulas de texto a las que se reubica la clase (para buscar, ej. "D04") */
+  private textoBusquedaAulas(a: Asignacion): string {
+    return (a.horarios ?? []).flatMap((h) => (h.reubicaciones ?? []).map((r) => r.aula_destino ?? '')).join(' ');
   }
 
   protected textoDias(dias: number[]): string {
@@ -243,8 +296,10 @@ export class AsignacionesListaComponent {
       a.materia?.nombre ?? '', a.grupo ?? '', `${a.docente?.apellidos ?? ''} ${a.docente?.nombres ?? ''}`,
       a.carrera?.nombre ?? '', this.nombreSistema(a), `${fechaCorta(a.fecha_inicio)} - ${fechaCorta(a.fecha_fin)}`,
       this.textoDias(g.dias), `${hhmm(g.horaInicio)}-${hhmm(g.horaFin)}`, this.catalogos.codigoAmbiente(g.ambienteId), a.observacion ?? '',
+      this.reubicaciones(a).filter((r) => r.origenId === g.ambienteId && g.dias.includes(r.dia) && r.horaInicio === g.horaInicio)
+        .map((r) => `${DIAS_CORTOS[r.dia]} -> ${r.destino ?? 'suspendida'} (${r.fechas.map(fechaCorta).join(', ')})`).join('; '),
     ]));
     descargarCsv(`asignaciones_${hoyIso()}.csv`,
-      ['Materia', 'Grupo', 'Docente', 'Facultad', 'Sistema', 'Fechas', 'Días', 'Horario', 'Ambiente', 'Observación'], filas);
+      ['Materia', 'Grupo', 'Docente', 'Facultad', 'Sistema', 'Fechas', 'Días', 'Horario', 'Ambiente', 'Observación', 'Reubicaciones'], filas);
   }
 }
