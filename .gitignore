@@ -43,6 +43,11 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 
+# Archivos sueltos de trabajo (fotos, planillas) que no van al repo
+*.jpeg
+*.jpg
+*.xlsx
+
 # Archivos locales con credenciales (NO subir a un repo público)
 USUARIOS_PRUEBA.txt
 supabase/11_usuarios_prueba.sql
