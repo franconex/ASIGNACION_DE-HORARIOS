@@ -35,14 +35,30 @@ import { ModalComponent } from './modal.component';
 
           <!-- Clases que ese día dejaron el laboratorio en este horario -->
           @if (o.desplazadas?.length) {
-            <div class="rounded-lg border border-purple-200 bg-purple-50 p-3 text-sm text-purple-900">
-              <p class="mb-1 font-semibold">Este día el laboratorio fue cedido por:</p>
-              @for (dz of o.desplazadas; track $index) {
-                <p>
-                  <b>{{ dz.docente }}</b>@if (dz.materia) { · {{ dz.materia }} }
-                  @if (dz.destino) { → se va a <b>{{ dz.destino }}</b> } @else if (dz.suspendida) { → <b>clase suspendida</b> }
-                </p>
-              }
+            <div class="rounded-lg border border-purple-200 bg-purple-50 p-3 text-sm">
+              <p class="mb-2 flex items-center gap-1.5 font-semibold text-purple-800">
+                <app-icono nombre="ceder" [tamano]="15" /> Este día el laboratorio fue cedido por
+              </p>
+              <div class="space-y-2">
+                @for (dz of o.desplazadas; track $index) {
+                  <div class="flex items-center justify-between gap-3 rounded-md bg-superficie px-3 py-2">
+                    <div class="min-w-0">
+                      <p class="truncate font-semibold text-slate-800">{{ dz.docente }}</p>
+                      @if (dz.materia) { <p class="truncate text-xs text-slate-500">{{ dz.materia }}</p> }
+                    </div>
+                    <div class="shrink-0 text-right">
+                      <p class="text-[11px] tracking-wide text-slate-500 uppercase">Se va a</p>
+                      @if (dz.destino) {
+                        <span class="chip bg-purple-100 !text-sm font-bold text-purple-800">{{ dz.destino }}</span>
+                      } @else if (dz.suspendida) {
+                        <span class="chip bg-red-100 text-red-700">Clase suspendida</span>
+                      } @else {
+                        <span class="text-xs text-slate-500">Sin indicar</span>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
             </div>
           }
 
