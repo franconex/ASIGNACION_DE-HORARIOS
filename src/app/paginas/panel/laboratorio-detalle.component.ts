@@ -10,7 +10,8 @@ import { DIAS_CORTOS, diaIso, fechaCorta, fechaLarga, hhmm, hoyIso, rangoFechas,
 import { Asignacion, BloqueHorario, Ocupacion } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { ConfirmacionService } from '../../core/confirmacion.service';
-import { OcupacionService, textoDesplazada } from '../../core/ocupacion.service';
+import { colorCedido, OcupacionService, textoDesplazada } from '../../core/ocupacion.service';
+import { TemaService } from '../../core/tema.service';
 import { PanelesService, PestanaLaboratorio } from '../../core/paneles.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
 
@@ -108,7 +109,7 @@ import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
                       <td class="p-0.5 align-top" [class.bg-red-50/40]="catalogos.conjuntoFeriados().has(d)">
                         @for (o of ocupacionesEn(d, b); track o.clave) {
                           <button class="mb-0.5 block w-full rounded border-l-[3px] px-1 py-0.5 text-left leading-tight hover:brightness-95"
-                                  [style.border-left-color]="o.color" [style.background]="o.color + '1f'" (click)="seleccionada.set(o)"
+                                  [style.border-left-color]="colorBloque(o)" [style.background]="colorBloque(o) + (tema.modo() === 'oscuro' ? '33' : '1f')" (click)="seleccionada.set(o)"
                                   [title]="[o.titulo + ' · ' + o.detalle].concat((o.desplazadas ?? []).map(textoDesplazada)).join('\n')">
                             <span class="block truncate font-semibold">{{ o.titulo }}</span>
                             <span class="block truncate text-xs text-slate-500">{{ hhmm(o.hora_inicio) }}–{{ hhmm(o.hora_fin) }}</span>
@@ -195,6 +196,7 @@ export class LaboratorioDetalleComponent {
   protected readonly catalogos = inject(CatalogosService);
   protected readonly paneles = inject(PanelesService);
   private readonly ocupacion = inject(OcupacionService);
+  protected readonly tema = inject(TemaService);
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
   private readonly confirmacion = inject(ConfirmacionService);
@@ -281,6 +283,11 @@ export class LaboratorioDetalleComponent {
   }
 
   protected readonly textoDesplazada = textoDesplazada;
+
+  /** Color del bloque: el de la carrera, o el de "cedido" si el ambiente fue cedido */
+  protected colorBloque(o: Ocupacion): string {
+    return o.estado === 'cedida' ? colorCedido(this.tema.modo() === 'oscuro') : o.color;
+  }
 
   protected ocupacionesEn(fecha: string, b: BloqueHorario): Ocupacion[] {
     return this.ocupaciones().filter((o) => o.fecha === fecha && seSolapan(o.hora_inicio, o.hora_fin, b.hora_inicio, b.hora_fin));

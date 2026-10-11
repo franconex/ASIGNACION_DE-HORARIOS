@@ -98,6 +98,7 @@ En **Laboratorios**, al tocar un laboratorio se abre su **croquis** dibujado com
   | 34 | `34_asignacion_reubica_choques.sql` | **Asignar una clase aunque algunos días el laboratorio esté ocupado** (evento planificado u otra clase): esos días la clase se **reubica** a otro laboratorio libre o a un aula, en la misma operación (`rpc_guardar_asignacion` con `reubicaciones`); el calendario los pinta en ámbar |
   | 35 | `35_completar_cuenta.sql` | **Completar la cuenta al recibir un rol**: quien entró con Google, la primera vez que tiene rol confirma su nombre y crea una contraseña (pantalla `/completar-cuenta`), para entrar también con correo y contraseña (`perfiles.cuenta_completa`, `rpc_completar_cuenta`) |
   | 41 | `41_ticket_fuera_de_turno.sql` | **Ticket fuera de turno**: cada ticket guarda si el auxiliar lo registró fuera de su turno del día (sábado incluido, hora de La Paz) en `atenciones.fuera_de_turno`; lo calcula un trigger al crear (no se puede editar) y se recalculó para los tickets ya registrados. Admin y encargado nunca salen fuera de turno |
+  | 42 | `42_cedidos_por_reubicacion.sql` | **Cesiones y reubicaciones en una sola lista**: `fn_cedidos_por_reubicacion(p_desde)` devuelve cada día en que una clase dejó su laboratorio (a qué laboratorio/aula se fue) y quién lo ocupa en su lugar; la lista de Cesiones la muestra junto a las cesiones como "ambiente cedido" |
 
 3. **Primer administrador**
    - **Authentication → Users → Add user**: correo y contraseña, con *Auto Confirm User* marcado.

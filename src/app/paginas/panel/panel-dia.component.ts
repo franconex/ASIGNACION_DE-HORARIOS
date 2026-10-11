@@ -11,7 +11,7 @@ import {
 } from '../../core/fechas';
 import { Ambiente, Ocupacion } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
-import { OcupacionService, textoDesplazada } from '../../core/ocupacion.service';
+import { colorCedido, OcupacionService, textoDesplazada } from '../../core/ocupacion.service';
 import { PanelesService } from '../../core/paneles.service';
 import { TemaService } from '../../core/tema.service';
 
@@ -475,27 +475,22 @@ export class PanelDiaComponent implements OnDestroy {
   }
 
   protected colorOcupacion(o: Ocupacion): string {
+    if (o.estado === 'cedida') return colorCedido(this.tema.modo() === 'oscuro');
     if (o.origen === 'reserva') return '#ea580c';
-    if (o.origen === 'cesion' || o.estado === 'cedida') return '#9333ea';
     return o.estado === 'reubicada' ? '#6b7fd6' : '#3a5bc4';
   }
 
   /**
-   * Líneas de texto de cada bloque. En una cesión manda quien viene: su
-   * materia y su nombre; al final, en pequeño, quién cedió y a qué aula se fue.
+   * Líneas de texto de cada bloque. En un ambiente cedido (cesión o clase
+   * reubicada) manda quien viene: su materia y su nombre; al final, en
+   * pequeño, quién cedió y a qué aula se fue.
    */
   protected lineasOcupacion(o: Ocupacion): string[] {
     const partes = o.detalle.split(' · ');
-    if (o.origen === 'cesion') {
-      const receptor = partes[0];
-      const cedente = (partes[1] ?? '').replace('cedido por ', '');
-      const aula = cedente.match(/\(se va a (.+)\)$/)?.[1];
-      const titular = cedente.replace(/\s*\(se va a .+\)$/, '');
-      return [o.titulo, receptor, aula ? `Cedido por ${titular} (→ ${aula})` : `Cedido por ${titular}`];
-    }
     const cedidos = (o.desplazadas ?? []).map(textoDesplazada);
+    if (o.estado === 'cedida' && o.origen !== 'reserva') return [o.titulo, partes[0], ...cedidos];
     if (o.origen === 'reserva') return [o.titulo, partes.slice(0, 2).join(', '), ...cedidos];
-    return [o.titulo, partes[0], partes.slice(1).join(', '), ...cedidos].filter(Boolean);
+    return [o.titulo, partes[0], partes.slice(1).join(', ')].filter(Boolean);
   }
 
   protected etiquetaHora(minutos: number): string {

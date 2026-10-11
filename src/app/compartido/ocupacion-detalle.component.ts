@@ -6,7 +6,8 @@ import { fechaLarga, hhmm } from '../core/fechas';
 import { Ambiente, Ocupacion } from '../core/modelos';
 import { NotificacionesService } from '../core/notificaciones.service';
 import { ConfirmacionService } from '../core/confirmacion.service';
-import { OcupacionService } from '../core/ocupacion.service';
+import { colorCedido, OcupacionService } from '../core/ocupacion.service';
+import { TemaService } from '../core/tema.service';
 import { PanelesService } from '../core/paneles.service';
 import { SupabaseService, ErrorSistema } from '../core/supabase.service';
 import { IconoComponent } from './icono.component';
@@ -25,7 +26,7 @@ import { ModalComponent } from './modal.component';
         <div class="space-y-4">
           <!-- Encabezado -->
           <div class="flex items-start gap-3">
-            <span class="mt-1 h-10 w-1.5 shrink-0 rounded-full" [style.background]="o.color"></span>
+            <span class="mt-1 h-10 w-1.5 shrink-0 rounded-full" [style.background]="o.estado === 'cedida' ? colorCedido(tema.modo() === 'oscuro') : o.color"></span>
             <div>
               <p class="text-lg font-semibold">{{ o.titulo }}</p>
               <p class="text-sm text-slate-600">{{ o.detalle }}</p>
@@ -37,7 +38,10 @@ import { ModalComponent } from './modal.component';
             <div class="rounded-lg border border-purple-200 bg-purple-50 p-3 text-sm text-purple-900">
               <p class="mb-1 font-semibold">Este día el laboratorio fue cedido por:</p>
               @for (dz of o.desplazadas; track $index) {
-                <p><b>{{ dz.docente }}</b> · {{ dz.materia }} → @if (dz.destino) { se va a <b>{{ dz.destino }}</b> } @else { <b>clase suspendida</b> }</p>
+                <p>
+                  <b>{{ dz.docente }}</b>@if (dz.materia) { · {{ dz.materia }} }
+                  @if (dz.destino) { → se va a <b>{{ dz.destino }}</b> } @else if (dz.suspendida) { → <b>clase suspendida</b> }
+                </p>
               }
             </div>
           }
@@ -128,6 +132,8 @@ export class OcupacionDetalleComponent {
   protected readonly auth = inject(AuthService);
   protected readonly catalogos = inject(CatalogosService);
   private readonly ocupacionServicio = inject(OcupacionService);
+  protected readonly tema = inject(TemaService);
+  protected readonly colorCedido = colorCedido;
   private readonly supabase = inject(SupabaseService);
   private readonly notificaciones = inject(NotificacionesService);
   private readonly confirmacion = inject(ConfirmacionService);

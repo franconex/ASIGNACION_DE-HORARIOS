@@ -4,13 +4,39 @@ import {
 } from './modelos';
 import { ErrorSistema, SupabaseService } from './supabase.service';
 
+/** Texto corto de quien cedió: "Cedido por Escobar Alex (→ D04)" */
+export function textoDesplazada(d: ClaseDesplazada): string {
+  const lugar = d.destino ? ` (→ ${d.destino})` : d.suspendida ? ' (clase suspendida)' : '';
+  return `Cedido por ${d.docente}${lugar}`;
+}
+
+/** Color de un ambiente cedido (cesión o clase reubicada), legible en ambos temas */
+export function colorCedido(oscuro: boolean): string {
+  return oscuro ? '#c084fc' : '#9333ea';
+}
+
+/** Fila devuelta por fn_cedidos_por_reubicacion */
+export interface CedidoPorReubicacion {
+  reubicacion_id: number;
+  asignacion_horario_id: number;
+  asignacion_id: number;
+  fecha: string;
+  dia_semana: number;
+  hora_inicio: string;
+  hora_fin: string;
+  ambiente_id: number;
+  docente: string;
+  materia: string;
+  destino: string | null;
+  motivo: string;
+  reserva_id: number | null;
+  viene_titulo: string | null;
+  viene_detalle: string | null;
+}
+
 /**
  * Acceso a las funciones de ocupación, choques y guardado (RPC de Supabase).
  */
-/** Texto corto de una clase desplazada: "Cedido por Escobar Alex (→ D04)" */
-export function textoDesplazada(d: ClaseDesplazada): string {
-  return `Cedido por ${d.docente} (${d.destino ? '→ ' + d.destino : 'clase suspendida'})`;
-}
 
 @Injectable({ providedIn: 'root' })
 export class OcupacionService {
@@ -35,8 +61,16 @@ export class OcupacionService {
         asignacion: { docente: { nombres: string; apellidos: string } | null; materia: { nombre: string } | null } | null } | null;
     };
     const filas = (data ?? []) as unknown as FilaReubicacion[];
-    if (!filas.length) return ocupaciones;
     for (const o of ocupaciones) {
+      // Cesión: el titular que cedió viene en el detalle ("Receptor · cedido por Titular (se va a C-29)")
+      if (o.origen === 'cesion') {
+        const cedente = (o.detalle.split(' · ')[1] ?? '').replace('cedido por ', '');
+        o.desplazadas = [{
+          docente: cedente.replace(/\s*\(se va a .+\)$/, ''), materia: '',
+          destino: cedente.match(/\(se va a (.+)\)$/)?.[1] ?? null, suspendida: false,
+        }];
+        continue;
+      }
       const desplazadas: ClaseDesplazada[] = filas
         .filter((r) => r.horario && r.fecha === o.fecha && r.horario.ambiente_id === o.ambiente_id && r.horario.id !== o.asignacion_horario_id &&
           r.horario.hora_inicio < o.hora_fin && o.hora_inicio < r.horario.hora_fin)
@@ -44,16 +78,19 @@ export class OcupacionService {
           docente: `${r.horario?.asignacion?.docente?.apellidos ?? ''} ${r.horario?.asignacion?.docente?.nombres ?? ''}`.trim(),
           materia: r.horario?.asignacion?.materia?.nombre ?? '',
           destino: r.destino?.codigo ?? r.aula_destino,
+          suspendida: !r.destino && !r.aula_destino,
         }));
       if (!desplazadas.length) continue;
       o.desplazadas = desplazadas;
       // La clase que ocupa el laboratorio se muestra como un ambiente cedido
-      if (o.origen === 'clase') {
-        o.estado = 'cedida';
-        o.color = '#9333ea';
-      }
+      if (o.origen === 'clase') o.estado = 'cedida';
     }
     return ocupaciones;
+  }
+
+  /** Días en que una clase dejó su laboratorio (reubicada), con quién vino en su lugar */
+  cedidosPorReubicacion(desde: string | null): Promise<CedidoPorReubicacion[]> {
+    return this.supabase.rpc<CedidoPorReubicacion[]>('fn_cedidos_por_reubicacion', { p_desde: desde });
   }
 
   /** Choques existentes en un rango */

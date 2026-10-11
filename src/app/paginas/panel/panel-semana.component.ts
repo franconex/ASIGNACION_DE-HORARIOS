@@ -10,7 +10,8 @@ import {
 } from '../../core/fechas';
 import { Ambiente, BloqueHorario, Ocupacion } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
-import { OcupacionService, textoDesplazada } from '../../core/ocupacion.service';
+import { colorCedido, OcupacionService, textoDesplazada } from '../../core/ocupacion.service';
+import { TemaService } from '../../core/tema.service';
 import { PanelesService } from '../../core/paneles.service';
 
 /**
@@ -78,7 +79,7 @@ import { PanelesService } from '../../core/paneles.service';
                 <td class="border-b border-l border-slate-100 p-1 align-top" [class.bg-marca-50/30]="d === hoy" [class.bg-red-50/40]="esFeriado(d)">
                   @for (o of ocupacionesEn(d, b); track o.clave) {
                     <button class="mb-1 block w-full overflow-hidden rounded-md border-l-[3px] px-1.5 py-1 text-left leading-tight transition hover:shadow-sm"
-                            [style.border-left-color]="colorOcupacion(o)" [style.background]="colorOcupacion(o) + '1f'" (click)="seleccionada.set(o)"
+                            [style.border-left-color]="colorOcupacion(o)" [style.background]="colorOcupacion(o) + (tema.modo() === 'oscuro' ? '33' : '1f')" (click)="seleccionada.set(o)"
                             [title]="tituloOcupacion(o)">
                       <span class="block truncate text-sm font-semibold text-slate-800">{{ o.titulo }}</span>
                       <span class="block truncate text-xs text-slate-500 tabular-nums">{{ hhmm(o.hora_inicio) }}–{{ hhmm(o.hora_fin) }}</span>
@@ -114,6 +115,7 @@ export class PanelSemanaComponent {
   protected readonly catalogos = inject(CatalogosService);
   private readonly paneles = inject(PanelesService);
   private readonly ocupacionServicio = inject(OcupacionService);
+  protected readonly tema = inject(TemaService);
   private readonly notificaciones = inject(NotificacionesService);
 
   protected readonly hhmm = hhmm;
@@ -199,15 +201,15 @@ export class PanelSemanaComponent {
   }
 
   protected colorOcupacion(o: Ocupacion): string {
+    if (o.estado === 'cedida') return colorCedido(this.tema.modo() === 'oscuro');
     if (o.origen === 'reserva') return '#ea580c';
-    if (o.origen === 'cesion' || o.estado === 'cedida') return '#9333ea';
     return o.estado === 'reubicada' ? '#6b7fd6' : '#3a5bc4';
   }
 
   /** Segunda línea del bloque (docente de la clase, o a quién se cedió) */
   protected textoSecundario(o: Ocupacion): string {
     const partes = o.detalle.split(' · ');
-    if (o.origen === 'cesion' || o.estado === 'cedida') return `Cedido a ${partes[0]}`;
+    if (o.estado === 'cedida' && o.origen !== 'reserva') return `Cedido a ${partes[0]}`;
     if (o.origen === 'reserva') return partes[0] ?? '';
     return partes[0] ?? '';
   }

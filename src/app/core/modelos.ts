@@ -455,7 +455,11 @@ export interface Ocupacion {
   color: string;
   prioridad: number;
   estado: string;
-  /** Clases que ese día dejaron este laboratorio en este horario (se calcula en el cliente) */
+  /**
+   * Quién cedió el laboratorio en este horario (se calcula en el cliente):
+   * el titular de una cesión o las clases reubicadas para dejar libre el lugar.
+   * Si hay alguno, la ocupación se muestra como "Ambiente cedido" (estado 'cedida').
+   */
   desplazadas?: ClaseDesplazada[];
 }
 
@@ -463,8 +467,10 @@ export interface Ocupacion {
 export interface ClaseDesplazada {
   docente: string;
   materia: string;
-  /** Laboratorio o aula a la que se va; null = clase suspendida ese día */
+  /** Laboratorio o aula a la que se va (null = sin indicar o suspendida) */
   destino: string | null;
+  /** La clase no se dicta ese día */
+  suspendida: boolean;
 }
 
 /** Fila devuelta por fn_verificar_choques */
