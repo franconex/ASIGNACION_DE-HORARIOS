@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { exigirAdmin, exigirCuentaPendiente, exigirGestionAuxiliares, exigirInvitado, exigirOperacion, exigirSesion, soloSinSesion } from './core/guards';
+import { exigirCuentaPendiente, exigirGestionAuxiliares, exigirInvitado, exigirOperacion, exigirSesion, soloSinSesion } from './core/guards';
 
 /**
  * Rutas del sistema: 3 pantallas. Asignar, ceder y eventos se hacen desde
@@ -38,7 +38,7 @@ export const routes: Routes = [
       { path: 'auxiliares', title: 'Auxiliares', canActivate: [exigirGestionAuxiliares], loadComponent: () => import('./paginas/operacion/auxiliares.component').then((m) => m.AuxiliaresComponent) },
       { path: 'laboratorios', title: 'Laboratorios', loadComponent: () => import('./paginas/laboratorios/laboratorios.component').then((m) => m.LaboratoriosComponent) },
       { path: 'registros', title: 'Registros', loadComponent: () => import('./paginas/registros/registros.component').then((m) => m.RegistrosComponent) },
-      { path: 'configuracion', title: 'Configuración', canActivate: [exigirAdmin], loadComponent: () => import('./paginas/configuracion/configuracion.component').then((m) => m.ConfiguracionComponent) },
+      { path: 'configuracion', title: 'Configuración', canActivate: [exigirGestionAuxiliares], loadComponent: () => import('./paginas/configuracion/configuracion.component').then((m) => m.ConfiguracionComponent) },
     ],
   },
   { path: '**', redirectTo: '' },

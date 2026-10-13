@@ -8,6 +8,9 @@ import { Perfil, Rol } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
 
+/** Cuentas que el encargado de auxiliares puede ver y gestionar */
+const ROLES_DEL_ENCARGADO: Rol[] = ['invitado', 'auxiliar', 'encargado'];
+
 /** Formulario de usuario nuevo */
 interface FormUsuario {
   nombre: string;
@@ -17,8 +20,9 @@ interface FormUsuario {
 }
 
 /**
- * Gestión de usuarios (solo admin): crear, cambiar rol, activar/desactivar
- * y restablecer contraseña.
+ * Gestión de usuarios. El admin crea, cambia rol, activa/desactiva y
+ * restablece contraseñas. El encargado de auxiliares solo ve las cuentas
+ * invitado, auxiliar y encargado, y solo crea o asigna esos dos roles.
  */
 @Component({
   selector: 'app-usuarios',
@@ -27,7 +31,11 @@ interface FormUsuario {
     <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold">Usuarios</h2>
-        <p class="text-sm text-slate-500">Admin: todo · Decano/Encargado: horarios · Encargado/Auxiliar: turnos y atenciones · Auxiliar: solo ve los horarios.</p>
+        @if (auth.esAdmin()) {
+          <p class="text-sm text-slate-500">Admin: todo · Decano/Encargado: horarios · Encargado/Auxiliar: turnos y atenciones · Auxiliar: solo ve los horarios.</p>
+        } @else {
+          <p class="text-sm text-slate-500">Puede crear cuentas y asignar los roles Auxiliar o Encargado de auxiliares.</p>
+        }
       </div>
       <button class="btn-primario" (click)="nuevo()"><app-icono nombre="agregar" [tamano]="16" /> Nuevo usuario</button>
     </div>
@@ -54,22 +62,25 @@ interface FormUsuario {
               <td class="font-medium">{{ u.nombre_completo }} @if (u.id === auth.perfil()?.id) { <span class="chip bg-marca-50 text-marca-700">usted</span> }</td>
               <td>{{ u.correo }}</td>
               <td>
-                <select class="campo !w-36 !py-1" [ngModel]="u.rol" (ngModelChange)="actualizar(u, { rol: $event })" [disabled]="u.id === auth.perfil()?.id">
-                  @for (r of roles; track r.valor) { <option [value]="r.valor">{{ r.texto }}</option> }
+                <select class="campo !w-36 !py-1" [ngModel]="u.rol" (ngModelChange)="asignarRol(u, $event)" [disabled]="u.id === auth.perfil()?.id">
+                  @if (!auth.esAdmin() && u.rol === 'invitado') { <option value="invitado" disabled>Elegir rol…</option> }
+                  @for (r of rolesAsignables(); track r.valor) { <option [value]="r.valor">{{ r.texto }}</option> }
                 </select>
               </td>
               <td>
-                <select class="campo !w-28 !py-1" [ngModel]="u.turno_habitual ?? ''" (ngModelChange)="actualizar(u, { turno_habitual: $event || null })" [disabled]="u.rol !== 'auxiliar' && u.rol !== 'encargado'">
+                <select class="campo !w-28 !py-1" [ngModel]="u.turno_habitual ?? ''" (ngModelChange)="actualizar(u, { turno_habitual: $event || null })" [disabled]="!auth.esAdmin() || (u.rol !== 'auxiliar' && u.rol !== 'encargado')">
                   @for (t of turnos; track t.valor) { <option [value]="t.valor">{{ t.texto }}</option> }
                 </select>
               </td>
               <td>
                 <button class="chip cursor-pointer" [class]="u.activo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'"
-                        (click)="actualizar(u, { activo: !u.activo })" [disabled]="u.id === auth.perfil()?.id">
+                        (click)="actualizar(u, { activo: !u.activo })" [disabled]="!auth.esAdmin() || u.id === auth.perfil()?.id">
                   {{ u.activo ? 'Activo' : 'Inactivo' }}
                 </button>
               </td>
-              <td class="text-right"><button class="btn-fantasma btn-sm" (click)="cambiarPassword(u)"><app-icono nombre="clave" [tamano]="15" /> Contraseña</button></td>
+              <td class="text-right">
+                @if (auth.esAdmin()) { <button class="btn-fantasma btn-sm" (click)="cambiarPassword(u)"><app-icono nombre="clave" [tamano]="15" /> Contraseña</button> }
+              </td>
             </tr>
           } @empty {
             <tr><td colspan="6" class="py-6 text-center text-sm text-slate-500">Ningún usuario coincide con la búsqueda.</td></tr>
@@ -87,7 +98,7 @@ interface FormUsuario {
           <div>
             <label class="etiqueta">Rol</label>
             <select class="campo" [(ngModel)]="f.rol">
-              @for (r of roles; track r.valor) { @if (r.valor !== 'invitado') { <option [value]="r.valor">{{ r.texto }}</option> } }
+              @for (r of rolesAsignables(); track r.valor) { @if (r.valor !== 'invitado') { <option [value]="r.valor">{{ r.texto }}</option> } }
             </select>
           </div>
         </div>
@@ -116,6 +127,7 @@ export class UsuariosComponent implements OnInit {
   protected readonly filtrados = computed(() => {
     const texto = normalizar(this.busqueda().trim());
     return this.usuarios()
+      .filter((u) => this.auth.esAdmin() || ROLES_DEL_ENCARGADO.includes(u.rol))
       .filter((u) => !this.soloInvitados() || u.rol === 'invitado')
       .filter((u) => !texto || normalizar(`${u.nombre_completo} ${u.correo}`).includes(texto))
       .sort((a, b) => Number(b.rol === 'invitado') - Number(a.rol === 'invitado'));
@@ -126,6 +138,9 @@ export class UsuariosComponent implements OnInit {
     { valor: 'auxiliar', texto: 'Auxiliar' }, { valor: 'encargado', texto: 'Encargado de auxiliares' },
     { valor: 'decano', texto: 'Decano' }, { valor: 'admin', texto: 'Administrador' },
   ];
+  /** El encargado solo asigna auxiliar o encargado */
+  protected readonly rolesAsignables = computed(() =>
+    this.auth.esAdmin() ? this.roles : this.roles.filter((r) => r.valor === 'auxiliar' || r.valor === 'encargado'));
   protected readonly turnos = [
     { valor: '', texto: '—' }, { valor: 'M', texto: 'Mañana' }, { valor: 'MD', texto: 'Mediodía' },
     { valor: 'T', texto: 'Tarde' }, { valor: 'N', texto: 'Noche' },
@@ -169,7 +184,20 @@ export class UsuariosComponent implements OnInit {
     }
   }
 
-  /** Cambia rol o estado */
+  /** Cambia el rol con la función segura de la base (admin: cualquiera; encargado: auxiliar/encargado) */
+  protected async asignarRol(u: Perfil, rol: Rol): Promise<void> {
+    try {
+      await this.supabase.rpc('fn_asignar_rol', { p_usuario: u.id, p_rol: rol });
+      this.notificaciones.exito('Rol asignado.');
+    } catch (e) {
+      this.notificaciones.error(e, 'No se cambió el rol');
+      // Se redibuja la tabla para que el desplegable vuelva al valor guardado
+      this.usuarios.set([]);
+    }
+    await this.cargar();
+  }
+
+  /** Cambia turno o estado (solo admin) */
   protected async actualizar(u: Perfil, cambios: Partial<Perfil>): Promise<void> {
     const { error } = await this.supabase.cliente.from('perfiles').update(cambios).eq('id', u.id);
     if (error) {

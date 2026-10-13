@@ -154,7 +154,7 @@ export class LayoutComponent implements OnInit {
     { ruta: '/auxiliares', texto: 'Auxiliares', icono: 'usuarios', visible: (a) => a.puedeGestionarAuxiliares() },
     { ruta: '/laboratorios', texto: 'Laboratorios', icono: 'laboratorio' },
     { ruta: '/registros', texto: 'Registros', icono: 'registros' },
-    { ruta: '/configuracion', texto: 'Configuración', icono: 'configuracion', visible: (a) => a.esAdmin() },
+    { ruta: '/configuracion', texto: 'Configuración', icono: 'configuracion', visible: (a) => a.puedeGestionarAuxiliares() },
   ];
   /** Ítems visibles para el rol actual */
   protected readonly menu = computed(() => this.items.filter((i) => !i.visible || i.visible(this.auth)));

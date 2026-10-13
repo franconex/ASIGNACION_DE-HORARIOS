@@ -13,7 +13,8 @@ type Pestana = 'docentes' | 'materias' | 'carreras' | 'feriados' | 'usuarios';
 
 /**
  * Configuración: primero un menú de tarjetas y, al tocar una, su catálogo
- * (docentes, materias, facultades, feriados y usuarios, este último solo admin).
+ * (docentes, materias, facultades, feriados y usuarios). El encargado de
+ * auxiliares solo ve Usuarios; el resto es del admin.
  * Los laboratorios tienen su propia sección en el menú.
  */
 @Component({
@@ -38,14 +39,14 @@ export class ConfiguracionComponent {
   /** Sección abierta, desde la URL (?pestana=docentes) */
   readonly pestana = input<string>();
 
-  private readonly secciones: (SeccionMenu<Pestana> & { soloAdmin?: boolean })[] = [
+  private readonly secciones: (SeccionMenu<Pestana> & { tambienEncargado?: boolean })[] = [
     { clave: 'docentes', texto: 'Docentes', descripcion: 'Datos de contacto, facultades y materias', icono: 'docente' },
     { clave: 'materias', texto: 'Materias', descripcion: 'Materias que se dictan en los laboratorios', icono: 'materia' },
     { clave: 'carreras', texto: 'Facultades', descripcion: 'Carreras con su sigla y color', icono: 'carrera' },
     { clave: 'feriados', texto: 'Feriados', descripcion: 'Días sin clases (se bloquean en el calendario)', icono: 'calendario' },
-    { clave: 'usuarios', texto: 'Usuarios', descripcion: 'Cuentas y roles del sistema', icono: 'candado', soloAdmin: true },
+    { clave: 'usuarios', texto: 'Usuarios', descripcion: 'Cuentas y roles del sistema', icono: 'candado', tambienEncargado: true },
   ];
-  protected readonly visibles = computed(() => this.secciones.filter((s) => !s.soloAdmin || this.auth.esAdmin()));
+  protected readonly visibles = computed(() => this.secciones.filter((s) => this.auth.esAdmin() || s.tambienEncargado));
   protected readonly actual = computed(() => this.visibles().find((s) => s.clave === this.pestana()) ?? null);
 
   /** Abre una sección (o vuelve al menú) dejándola en el historial del navegador */
