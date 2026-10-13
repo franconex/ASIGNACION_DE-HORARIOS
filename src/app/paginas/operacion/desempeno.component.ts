@@ -1385,43 +1385,56 @@ export class DesempenoComponent implements OnInit {
     if (this.modo() === 'rango' && this.errorRango()) return;
     const { desde, hasta } = this.modo() === 'mes' ? rangoMes(this.mes()) : { desde: this.desde(), hasta: this.hasta() };
     this.periodo.set({ desde, hasta });
+    // Cada consulta lleva su número: si se cambia de periodo antes de que llegue, la respuesta vieja se descarta
+    const n = ++this.consulta;
     this.cargando.set(true);
-    void this.cargarUso(desde, hasta);
-    void this.cargarDetalle(desde, hasta);
-    void this.cargarFallas(desde, hasta);
-    void this.cargarSoftware(desde, hasta);
+    void this.cargarUso(desde, hasta, n);
+    void this.cargarDetalle(desde, hasta, n);
+    void this.cargarFallas(desde, hasta, n);
+    void this.cargarSoftware(desde, hasta, n);
     try {
-      this.datos.set(await this.supabase.rpc<Dashboard>('fn_dashboard_operacion', { p_desde: desde, p_hasta: hasta }));
+      const datos = await this.supabase.rpc<Dashboard>('fn_dashboard_operacion', { p_desde: desde, p_hasta: hasta });
+      if (n === this.consulta) this.datos.set(datos);
     } catch (e) {
+      if (n !== this.consulta) return;
       this.datos.set(null);
       this.notificaciones.error(e, 'No se cargó el dashboard');
     } finally {
-      this.cargando.set(false);
+      if (n === this.consulta) this.cargando.set(false);
     }
   }
 
-  private async cargarUso(desde: string, hasta: string): Promise<void> {
+  /** Número de la última consulta pedida */
+  private consulta = 0;
+
+  private async cargarUso(desde: string, hasta: string, n: number): Promise<void> {
     try {
-      this.uso.set(await this.supabase.rpc<UsoLabs>('fn_dashboard_uso', { p_desde: desde, p_hasta: hasta }));
+      const datos = await this.supabase.rpc<UsoLabs>('fn_dashboard_uso', { p_desde: desde, p_hasta: hasta });
+      if (n === this.consulta) this.uso.set(datos);
     } catch (e) {
+      if (n !== this.consulta) return;
       this.uso.set(null);
       this.notificaciones.error(e, 'No se cargó el uso de laboratorios');
     }
   }
 
-  private async cargarDetalle(desde: string, hasta: string): Promise<void> {
+  private async cargarDetalle(desde: string, hasta: string, n: number): Promise<void> {
     try {
-      this.detalle.set(await this.supabase.rpc<Detalle>('fn_dashboard_detalle', { p_desde: desde, p_hasta: hasta }));
+      const datos = await this.supabase.rpc<Detalle>('fn_dashboard_detalle', { p_desde: desde, p_hasta: hasta });
+      if (n === this.consulta) this.detalle.set(datos);
     } catch (e) {
+      if (n !== this.consulta) return;
       this.detalle.set(null);
       this.notificaciones.error(e, 'No se cargó el análisis detallado');
     }
   }
 
-  private async cargarSoftware(desde: string, hasta: string): Promise<void> {
+  private async cargarSoftware(desde: string, hasta: string, n: number): Promise<void> {
     try {
-      this.software.set(await this.supabase.rpc<DashSoftware>('fn_dashboard_software', { p_desde: desde, p_hasta: hasta }));
+      const datos = await this.supabase.rpc<DashSoftware>('fn_dashboard_software', { p_desde: desde, p_hasta: hasta });
+      if (n === this.consulta) this.software.set(datos);
     } catch (e) {
+      if (n !== this.consulta) return;
       this.software.set(null);
       this.notificaciones.error(e, 'No se cargó el software');
     }
@@ -1439,10 +1452,12 @@ export class DesempenoComponent implements OnInit {
       sw.por_software.map((f) => [f.nombre, LICENCIAS[f.licencia].texto, f.pedidos, f.instalar, f.actualizar, f.desinstalar, f.labs.join(', ')]));
   }
 
-  private async cargarFallas(desde: string, hasta: string): Promise<void> {
+  private async cargarFallas(desde: string, hasta: string, n: number): Promise<void> {
     try {
-      this.fallas.set(await this.supabase.rpc<Fallas>('fn_dashboard_fallas', { p_desde: desde, p_hasta: hasta }));
+      const datos = await this.supabase.rpc<Fallas>('fn_dashboard_fallas', { p_desde: desde, p_hasta: hasta });
+      if (n === this.consulta) this.fallas.set(datos);
     } catch (e) {
+      if (n !== this.consulta) return;
       this.fallas.set(null);
       this.notificaciones.error(e, 'No se cargaron las fallas');
     }

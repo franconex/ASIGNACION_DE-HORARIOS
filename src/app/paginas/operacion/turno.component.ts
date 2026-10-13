@@ -61,7 +61,7 @@ function horaLaPaz(): string {
         <div class="space-y-1.5">
           @for (t of pendientes(); track t.id) {
             <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-2.5 transition hover:border-emerald-300 hover:bg-emerald-50/50">
-              <input type="checkbox" class="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600" [disabled]="!auth.puedeOperar()" (change)="marcar(t, true)">
+              <input type="checkbox" class="mt-0.5 h-5 w-5 shrink-0 accent-emerald-600" [disabled]="!auth.puedeOperar()" (change)="marcar(t, true, $event)">
               <span class="min-w-0 flex-1">
                 <span class="block text-sm">
                   @if (t.ambiente?.codigo) { <span class="chip mr-1 bg-marca-50 text-marca-700">{{ t.ambiente?.codigo }}</span> }
@@ -386,6 +386,9 @@ export class TurnoComponent implements OnInit, OnDestroy {
     clearInterval(this.reloj);
   }
 
+  /** Ya se propuso el turno al entrar */
+  private turnoPropuesto = false;
+
   private async cargar(): Promise<void> {
     // Fotos vencidas (30 días después de subirlas): se borran; si falla, se reintenta la próxima vez
     await this.op.limpiarFotosReporte().catch((e) => console.error(e));
@@ -398,7 +401,11 @@ export class TurnoComponent implements OnInit, OnDestroy {
       this.pendientes.set(pendientes);
       this.programados.set(programados);
       this.rotacion.set(rotacion);
-      this.turno.set(this.miTurno() ?? this.turnoAhora());
+      // El turno se propone solo al entrar: al recargar (marcar una tarea, editar) se respeta el que eligió
+      if (!this.turnoPropuesto) {
+        this.turno.set(this.miTurno() ?? this.turnoAhora());
+        this.turnoPropuesto = true;
+      }
       await this.cargarMisBajas();
       const ahora = Date.now();
       const vigentes = reportes.filter((r) => r.foto_path && r.foto_expira && new Date(r.foto_expira).getTime() > ahora)
@@ -494,12 +501,14 @@ export class TurnoComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected async marcar(t: TareaReporte, hecha: boolean): Promise<void> {
+  protected async marcar(t: TareaReporte, hecha: boolean, evento?: Event): Promise<void> {
     try {
       await this.op.marcarTarea(t.id, hecha);
       if (hecha) this.notificaciones.exito('Tarea hecha.');
       await this.cargar();
     } catch (e) {
+      // No se guardó: la casilla vuelve a como estaba
+      if (evento) (evento.target as HTMLInputElement).checked = !hecha;
       this.notificaciones.error(e);
     }
   }

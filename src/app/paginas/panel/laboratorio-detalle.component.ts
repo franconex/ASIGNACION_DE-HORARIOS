@@ -255,6 +255,8 @@ export class LaboratorioDetalleComponent {
 
   /** Carga la semana y las asignaciones del laboratorio */
   async cargar(): Promise<void> {
+    // Si se cambia de semana antes de que llegue la respuesta, la vieja se descarta
+    const n = ++this.consulta;
     this.cargando.set(true);
     try {
       const [ocupaciones, respuesta] = await Promise.all([
@@ -264,6 +266,7 @@ export class LaboratorioDetalleComponent {
           .eq('horarios.ambiente_id', this.ambienteId())
           .gte('fecha_fin', hoyIso()),
       ]);
+      if (n !== this.consulta) return;
       if (respuesta.error) throw new ErrorSistema(respuesta.error);
       this.ocupaciones.set(ocupaciones.filter((o) => o.ambiente_id === this.ambienteId()));
       const lista = (respuesta.data ?? []) as Asignacion[];
@@ -271,11 +274,13 @@ export class LaboratorioDetalleComponent {
       lista.sort((a, b) => (a.horarios?.[0]?.hora_inicio ?? '').localeCompare(b.horarios?.[0]?.hora_inicio ?? ''));
       this.asignaciones.set(lista);
     } catch (e) {
-      this.notificaciones.error(e);
+      if (n === this.consulta) this.notificaciones.error(e);
     } finally {
-      this.cargando.set(false);
+      if (n === this.consulta) this.cargando.set(false);
     }
   }
+
+  private consulta = 0;
 
   protected moverSemana(dias: number): void {
     this.lunes.set(sumarDias(this.lunes(), dias));

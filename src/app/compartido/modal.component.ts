@@ -20,10 +20,12 @@ const abiertos: ModalComponent[] = [];
 @Component({
   selector: 'app-modal',
   imports: [IconoComponent],
+  // En el documento: funciona aunque el foco se haya ido al <body>
+  host: { '(document:keydown)': 'alTeclear($event)' },
   template: `
     @if (abierto()) {
       <div class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 backdrop-blur-[2px] sm:p-4"
-           (mousedown)="alPulsarFondo($event)" (keydown)="alTeclear($event)">
+           (mousedown)="alPulsarFondo($event)">
         <div #cuadro class="tarjeta flex min-h-full w-full flex-col rounded-none border-0 shadow-xl outline-none sm:my-8 sm:min-h-0 sm:rounded-lg sm:border"
              [class]="anchos[ancho()]" (mousedown)="$event.stopPropagation()" role="dialog" aria-modal="true" [attr.aria-label]="titulo()" tabindex="-1">
           <div class="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-slate-200 bg-superficie px-4 py-3 sm:static sm:rounded-t-lg sm:px-5">
@@ -89,16 +91,20 @@ export class ModalComponent implements OnDestroy {
     if (anterior?.isConnected) setTimeout(() => anterior.focus({ preventScroll: true }));
   }
 
-  /** Cierra al hacer clic fuera del cuadro, solo si se pidió */
+  /** Clic fuera del cuadro: cierra solo si se pidió; si no, el foco se queda dentro */
   protected alPulsarFondo(evento: MouseEvent): void {
-    if (this.cerrarConFondo() && evento.target === evento.currentTarget) this.cerrar.emit();
+    if (evento.target !== evento.currentTarget) return;
+    if (this.cerrarConFondo()) this.cerrar.emit();
+    else evento.preventDefault();
   }
 
   /** Escape cierra el de arriba; Tab da la vuelta dentro del modal */
   protected alTeclear(evento: KeyboardEvent): void {
-    if (abiertos.at(-1) !== this) return;
+    if (abiertos.at(-1) !== this || evento.defaultPrevented) return;
     if (evento.key === 'Escape') {
-      evento.stopPropagation();
+      // Una confirmación encima se cierra primero (ella marca la tecla como usada)
+      if (document.querySelector('[role="alertdialog"]')) return;
+      evento.preventDefault();
       this.cerrar.emit();
       return;
     }
@@ -109,7 +115,11 @@ export class ModalComponent implements OnDestroy {
     if (!lista.length) return;
     const primero = lista[0];
     const ultimo = lista[lista.length - 1];
-    if (evento.shiftKey && (document.activeElement === primero || document.activeElement === elemento)) {
+    // Si el foco quedó fuera del modal, vuelve adentro
+    if (!elemento.contains(document.activeElement)) {
+      evento.preventDefault();
+      (evento.shiftKey ? ultimo : primero).focus();
+    } else if (evento.shiftKey && (document.activeElement === primero || document.activeElement === elemento)) {
       evento.preventDefault();
       ultimo.focus();
     } else if (!evento.shiftKey && document.activeElement === ultimo) {

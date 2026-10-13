@@ -232,6 +232,12 @@ export class CrudTablaComponent {
       fila[c.clave] = typeof valor === 'string' ? valor.trim() || null : valor;
     }
     if (this.editando() && this.clavePrimaria() === 'id') fila['id'] = datos['id'];
+    // Clave propia (ej. la fecha de un feriado): al crear, no se pisa uno que ya existe
+    const clave = this.clavePrimaria();
+    if (!this.editando() && clave !== 'id' && this.filas().some((f) => (f as Record<string, unknown>)[clave] === fila[clave])) {
+      this.notificaciones.aviso('Ya existe un registro con ese valor. Edítalo en la lista en vez de crear otro.');
+      return;
+    }
     this.guardando.set(true);
     try {
       await this.catalogos.guardar(this.tabla(), fila, this.clavePrimaria());

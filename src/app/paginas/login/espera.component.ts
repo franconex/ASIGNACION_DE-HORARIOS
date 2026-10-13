@@ -64,6 +64,8 @@ export class EsperaComponent implements OnInit, OnDestroy {
     this.revisando.set(true);
     try {
       await this.auth.recargarPerfil();
+      // Sin conexión no se decide nada: se vuelve a revisar en el próximo intento
+      if (this.auth.perfilSinConexion()) return;
       const perfil = this.auth.perfil();
       if (!perfil?.activo) await this.salir();
       else if (!this.auth.esInvitado()) await this.router.navigateByUrl('/');

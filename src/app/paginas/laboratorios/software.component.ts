@@ -283,12 +283,17 @@ export class SoftwareComponent implements OnInit {
   }
 
   private async cargarMovimientos(): Promise<void> {
+    // Si se cambia de periodo antes de que llegue la respuesta, la vieja se descarta
+    const n = ++this.consulta;
     try {
-      this.movimientos.set(await this.sw.movimientos(this.periodo() ? sumarDias(hoyIso(), -this.periodo()) : null));
+      const lista = await this.sw.movimientos(this.periodo() ? sumarDias(hoyIso(), -this.periodo()) : null);
+      if (n === this.consulta) this.movimientos.set(lista);
     } catch (e) {
-      this.notificaciones.error(e, 'No se cargaron los movimientos de software');
+      if (n === this.consulta) this.notificaciones.error(e, 'No se cargaron los movimientos de software');
     }
   }
+
+  private consulta = 0;
 
   private accion(m: MovimientoSoftware): Accion {
     return m.tipo === 'docente' ? 'pedido' : ((m.detalles.accion as Accion) ?? 'instalar');

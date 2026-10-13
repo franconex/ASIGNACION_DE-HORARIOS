@@ -376,17 +376,21 @@ export class CesionFormComponent implements OnInit {
 
   protected programarVerificacion(): void {
     clearTimeout(this.temporizador);
+    // Desde ya: Guardar espera a que termine la verificación (no se guarda con la anterior)
+    this.verificando.set(true);
     this.temporizador = setTimeout(() => void this.verificar(), 350);
   }
 
   /** Verifica que el docente que viene no tenga otra clase a esa hora (el laboratorio queda para él) */
   private async verificar(): Promise<void> {
     const grupos = this.fechasElegidasPorHorario();
+    // La versión sube siempre: una respuesta en camino de antes ya no vale
+    const version = ++this.version;
     if (!grupos.length || !this.receptorId()) {
       this.choques.set([]);
+      this.verificando.set(false);
       return;
     }
-    const version = ++this.version;
     this.verificando.set(true);
     try {
       // Una verificación por horario: cada uno ignora su propia cesión (al editar) y su clase

@@ -316,8 +316,16 @@ export class ObjetosPerdidosComponent implements OnInit {
     if (rutas.length) await this.supabase.cliente.storage.from(BUCKET).remove(rutas);
   }
 
+  /** Cuándo se pidieron los enlaces que hay en caché */
+  private firmadasEn = 0;
+
   /** Pide enlaces temporales (1 hora) de las fotos que aún no tienen */
   private async firmarFotos(rutas: string[]): Promise<void> {
+    // Los enlaces vencen en 1 hora: pasados 50 minutos se piden de nuevo (si no, las fotos dejan de verse)
+    if (Date.now() - this.firmadasEn > 50 * 60 * 1000) {
+      this.urls.set(new Map());
+      this.firmadasEn = Date.now();
+    }
     const faltan = rutas.filter((r) => !this.urls().has(r));
     if (!faltan.length) return;
     const { data } = await this.supabase.cliente.storage.from(BUCKET).createSignedUrls(faltan, 3600);

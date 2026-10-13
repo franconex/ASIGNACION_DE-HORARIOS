@@ -283,6 +283,8 @@ export class AuxiliaresComponent implements OnInit {
   }
 
   protected async agregarFalla(): Promise<void> {
+    // Enter dos veces seguidas no agrega la misma falla dos veces
+    if (this.guardando()) return;
     const nombre = this.fallaNueva.nombre.trim();
     if (nombre.length < 2) return this.notificaciones.aviso('Escribe el nombre de la falla.');
     if (this.op.fallas().some((f) => f.nombre.trim().toLowerCase() === nombre.toLowerCase())) {
@@ -343,12 +345,15 @@ export class AuxiliaresComponent implements OnInit {
   protected async cambiarTurno(u: Perfil, turno: TurnoCodigo): Promise<void> {
     this.guardando.set(true);
     try {
+      // Primero se guarda el nuevo; solo si salió bien se quitan los programados para después
       const futuros = this.turnosProgramados().filter((t) => t.perfil_id === u.id && t.desde > this.hoy).map((t) => t.id);
-      await this.op.eliminarTurnosProgramados(futuros);
       await this.op.programarTurnos([{ perfil_id: u.id, turno }], this.hoy);
+      await this.op.eliminarTurnosProgramados(futuros);
       this.notificaciones.exito(`${u.nombre_completo}: turno ${NOMBRE_TURNO[turno]}.`);
     } catch (e) {
       this.notificaciones.error(e, 'No se cambió el turno');
+      // El desplegable vuelve al turno guardado
+      this.auxiliares.set([]);
     } finally {
       this.guardando.set(false);
       await this.cargar();
@@ -381,6 +386,9 @@ export class AuxiliaresComponent implements OnInit {
       await this.cargar();
     } catch (e) {
       this.notificaciones.error(e, 'No se guardó');
+      // El desplegable vuelve al turno guardado
+      this.rotacion.set([]);
+      await this.cargar();
     }
   }
 

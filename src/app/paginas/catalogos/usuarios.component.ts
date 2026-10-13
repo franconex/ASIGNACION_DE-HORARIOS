@@ -172,8 +172,13 @@ export class UsuariosComponent implements OnInit {
   /** Cambia rol o estado */
   protected async actualizar(u: Perfil, cambios: Partial<Perfil>): Promise<void> {
     const { error } = await this.supabase.cliente.from('perfiles').update(cambios).eq('id', u.id);
-    if (error) this.notificaciones.error(new ErrorSistema(error));
-    else this.notificaciones.exito('Usuario actualizado.');
+    if (error) {
+      this.notificaciones.error(new ErrorSistema(error));
+      // Se redibuja la tabla para que el desplegable vuelva al valor guardado (no quede el que falló)
+      this.usuarios.set([]);
+    } else {
+      this.notificaciones.exito('Usuario actualizado.');
+    }
     await this.cargar();
   }
 

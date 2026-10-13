@@ -231,11 +231,14 @@ export class AsignacionesListaComponent {
   }
 
   protected async cargar(): Promise<void> {
+    // Si se cambia Vigentes/Todas antes de que llegue la respuesta, la vieja se descarta
+    const n = ++this.numeroConsulta;
     this.cargando.set(true);
     let consulta = this.supabase.cliente.from('asignaciones')
       .select('*, docente:docentes(id,nombres,apellidos), materia:materias(id,nombre), carrera:carreras(id,nombre,sigla,color), horarios:asignacion_horarios(*, reubicaciones(fecha, ambiente_destino_id, aula_destino, motivo)), fechas:asignacion_fechas(fecha)');
     if (this.soloVigentes()) consulta = consulta.gte('fecha_fin', hoyIso());
     const { data, error } = await consulta;
+    if (n !== this.numeroConsulta) return;
     this.cargando.set(false);
     if (error) {
       this.notificaciones.error(new ErrorSistema(error));
@@ -245,6 +248,8 @@ export class AsignacionesListaComponent {
     lista.sort((a, b) => (a.materia?.nombre ?? '').localeCompare(b.materia?.nombre ?? ''));
     this.asignaciones.set(lista);
   }
+
+  private numeroConsulta = 0;
 
   protected grupos(a: Asignacion): GrupoHorario[] {
     return agruparHorarios(a.horarios ?? []);

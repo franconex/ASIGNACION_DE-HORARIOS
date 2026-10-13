@@ -463,6 +463,8 @@ export class ReservaFormComponent implements OnInit {
 
   protected programarVerificacion(): void {
     clearTimeout(this.temporizador);
+    // Desde ya: Guardar espera a que termine la verificación (no se guarda con la anterior)
+    this.verificando.set(true);
     this.temporizador = setTimeout(() => void this.verificar(), 400);
   }
 
@@ -473,6 +475,7 @@ export class ReservaFormComponent implements OnInit {
     if (!horarios.length) {
       this.bloqueantes.set([]);
       this.afectadas.set([]);
+      this.verificando.set(false);
       return;
     }
     const ignorar = { reserva_id: this.id() ?? null };

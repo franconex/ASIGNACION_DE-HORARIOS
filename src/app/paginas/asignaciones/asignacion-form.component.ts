@@ -797,6 +797,8 @@ export class AsignacionFormComponent implements OnInit {
 
   protected programarVerificacion(): void {
     clearTimeout(this.temporizador);
+    // Desde ya: Guardar espera a que termine la verificación (no se guarda con la anterior)
+    this.verificando.set(true);
     this.temporizador = setTimeout(() => void this.verificar(), 400);
   }
 

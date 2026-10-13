@@ -132,6 +132,17 @@ export class SelectorFechasComponent {
   /** Hoy en la zona horaria de la universidad */
   protected readonly hoy = fechaActual(environment.zonaHoraria);
 
+  /** Fechas permitidas de la última vez (para no reiniciar el mes si no cambiaron) */
+  private clavePermitidas: string | null = null;
+  /** Último valor puesto desde el propio calendario */
+  private ultimoCambioPropio = '';
+
+  /** Cambia lo marcado desde el calendario (sin saltar de mes) */
+  private cambiarValor(fechas: string[]): void {
+    this.ultimoCambioPropio = fechas.join(',');
+    this.valor.set(fechas);
+  }
+
   /** Primer mes visible */
   protected readonly mesInicial = signal(this.hoy.slice(0, 8) + '01');
 
@@ -140,6 +151,10 @@ export class SelectorFechasComponent {
     effect(() => {
       const permitidas = this.fechasPermitidas();
       untracked(() => {
+        // Solo si cambió el contenido (la lista se recrea a menudo; no se salta de mes por eso)
+        const clave = [...(permitidas ?? [])].sort().join(',');
+        if (clave === this.clavePermitidas) return;
+        this.clavePermitidas = clave;
         const futuras = [...(permitidas ?? [])].filter((f) => this.permitirPasado() || f >= this.hoy).sort();
         const inicio = futuras[0] ?? this.hoy;
         this.mesInicial.set(inicio.slice(0, 8) + '01');
@@ -151,6 +166,8 @@ export class SelectorFechasComponent {
       const marcadas = this.valor();
       const inicial = this.fechaInicial();
       untracked(() => {
+        // Lo marcó o desmarcó el usuario en el calendario: se queda en el mes que está mirando
+        if (marcadas.join(',') === this.ultimoCambioPropio) return;
         const desde = this.mesInicial();
         const hasta = this.mesDesplazado(desde, this.cantidadMeses());
         if (marcadas.some((f) => f >= desde && f < hasta)) return;
@@ -269,13 +286,13 @@ export class SelectorFechasComponent {
   protected alternar(fecha: string): void {
     if (!this.habilitada(fecha)) return;
     if (!this.multiple()) {
-      this.valor.set([fecha]);
+      this.cambiarValor([fecha]);
       return;
     }
     const actual = new Set(this.valor());
     if (actual.has(fecha)) actual.delete(fecha);
     else actual.add(fecha);
-    this.valor.set([...actual].sort());
+    this.cambiarValor([...actual].sort());
   }
 
   /** Marca (o quita, si ya estaban todos) ese día de la semana en los meses visibles */
@@ -285,12 +302,12 @@ export class SelectorFechasComponent {
     const actual = new Set(this.valor());
     const todas = fechas.length > 0 && fechas.every((f) => actual.has(f));
     fechas.forEach((f) => (todas ? actual.delete(f) : actual.add(f)));
-    this.valor.set([...actual].sort());
+    this.cambiarValor([...actual].sort());
   }
 
   /** Quita las fechas que se pueden cambiar (las pasadas se conservan) */
   protected limpiar(): void {
-    this.valor.set(this.valor().filter((f) => !this.habilitada(f)));
+    this.cambiarValor(this.valor().filter((f) => !this.habilitada(f)));
   }
 
   protected moverMes(delta: number): void {

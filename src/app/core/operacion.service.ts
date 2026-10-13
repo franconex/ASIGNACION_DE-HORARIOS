@@ -152,8 +152,9 @@ export class OperacionService {
   /** Lista de atenciones con filtros (para reportes) */
   async listarAtenciones(filtro: FiltroOperacion = {}): Promise<Atencion[]> {
     let q = this.cliente.from('atenciones').select(SELECT_ATENCION).order('creado_en', { ascending: false });
-    if (filtro.desde) q = q.gte('creado_en', filtro.desde);
-    if (filtro.hasta) q = q.lte('creado_en', `${filtro.hasta}T23:59:59`);
+    // Fechas de La Paz (UTC-4): sin el desfase se tomarían como UTC y el día quedaría corrido 4 horas
+    if (filtro.desde) q = q.gte('creado_en', `${filtro.desde}T00:00:00-04:00`);
+    if (filtro.hasta) q = q.lte('creado_en', `${filtro.hasta}T23:59:59.999-04:00`);
     if (filtro.estado) q = q.eq('estado', filtro.estado);
     if (filtro.ambienteId) q = q.eq('ambiente_id', filtro.ambienteId);
     if (filtro.participante) q = q.or(`auxiliar_id.eq.${filtro.participante},colaboradores.cs.{${filtro.participante}}`);
@@ -318,7 +319,12 @@ export class OperacionService {
     if (!tareas.length) return;
     const filas = tareas.map((t) => ({ reporte_id: data.id, descripcion: t.descripcion, ambiente_id: t.ambiente_id }));
     const r = await this.cliente.from('reporte_tareas').insert(filas);
-    if (r.error) throw new ErrorSistema(r.error);
+    if (r.error) {
+      // Sin tareas el reporte queda incompleto: se deshace para que al reintentar no quede duplicado
+      const borrado = await this.cliente.from('reportes_turno').delete().eq('id', data.id);
+      if (!borrado.error && foto_path) await this.cliente.storage.from(BUCKET_REPORTES).remove([foto_path]);
+      throw new ErrorSistema(r.error);
+    }
   }
 
   /** PCs que el usuario dio de baja desde un momento (las que saldrán en su cierre) */

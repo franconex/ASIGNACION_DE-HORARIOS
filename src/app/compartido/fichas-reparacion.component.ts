@@ -175,8 +175,11 @@ export class FichasReparacionComponent implements OnInit {
           }
         }
         if (cambio) this.porPc.set(mapa);
+        // Se abre la primera solo si se agregaron PCs o se quitó la que estaba abierta
+        // (si el usuario la cerró, se respeta: la lista de PCs se recalcula a menudo)
         const abierta = this.abierta();
-        if (pcs.length && (abierta === null || !pcs.some((pc) => pc.id === abierta))) this.abierta.set(pcs[0].id);
+        const seQuitoLaAbierta = abierta !== null && !pcs.some((pc) => pc.id === abierta);
+        if (pcs.length && (seQuitoLaAbierta || (cambio && abierta === null))) this.abierta.set(pcs[0].id);
       });
     });
   }

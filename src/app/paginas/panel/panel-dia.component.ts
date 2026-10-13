@@ -385,25 +385,33 @@ export class PanelDiaComponent implements OnDestroy {
   // ------------------------------------------------------------------
 
   async cargar(): Promise<void> {
+    // Si se cambia de día antes de que llegue la respuesta, la vieja se descarta (no se mezclan días)
+    const n = ++this.consulta;
     this.cargando.set(true);
     try {
-      this.ocupaciones.set(await this.ocupacionServicio.ocupaciones(this.fecha(), this.fecha()));
+      const datos = await this.ocupacionServicio.ocupaciones(this.fecha(), this.fecha());
+      if (n !== this.consulta) return;
+      this.ocupaciones.set(datos);
       void this.contarConflictos();
     } catch (e) {
-      this.notificaciones.error(e, 'No se pudo cargar la ocupación');
+      if (n === this.consulta) this.notificaciones.error(e, 'No se pudo cargar la ocupación');
     } finally {
-      this.cargando.set(false);
+      if (n === this.consulta) this.cargando.set(false);
     }
   }
+
+  private consulta = 0;
+  private consultaMes = 0;
 
   private async cargarMes(primero: string): Promise<void> {
     const f = deIso(primero);
     const ultimo = aIso(new Date(f.getFullYear(), f.getMonth() + 1, 0));
+    const n = ++this.consultaMes;
     try {
       const datos = await this.ocupacionServicio.ocupaciones(primero, ultimo);
-      this.diasEspeciales.set(new Set(datos.filter((o) => o.origen !== 'clase' || o.estado !== 'normal').map((o) => o.fecha)));
+      if (n === this.consultaMes) this.diasEspeciales.set(new Set(datos.filter((o) => o.origen !== 'clase' || o.estado !== 'normal').map((o) => o.fecha)));
     } catch {
-      this.diasEspeciales.set(new Set());
+      if (n === this.consultaMes) this.diasEspeciales.set(new Set());
     }
   }
 

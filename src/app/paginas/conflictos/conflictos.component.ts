@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { IconoComponent } from '../../compartido/icono.component';
 import { OcupacionDetalleComponent } from '../../compartido/ocupacion-detalle.component';
@@ -7,6 +7,7 @@ import { fechaLarga, hhmm, hoyIso, sumarDias } from '../../core/fechas';
 import { Conflicto, Ocupacion } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { OcupacionService } from '../../core/ocupacion.service';
+import { PanelesService } from '../../core/paneles.service';
 
 /**
  * Vista de conflictos existentes en un rango de fechas.
@@ -76,10 +77,11 @@ import { OcupacionService } from '../../core/ocupacion.service';
     <app-ocupacion-detalle [ocupacion]="seleccionada()" (cerrar)="seleccionada.set(null)" (cambio)="cargar()" />
   `,
 })
-export class ConflictosComponent implements OnInit {
+export class ConflictosComponent {
   protected readonly catalogos = inject(CatalogosService);
   private readonly ocupacion = inject(OcupacionService);
   private readonly notificaciones = inject(NotificacionesService);
+  private readonly paneles = inject(PanelesService);
 
   protected readonly hhmm = hhmm;
   protected readonly fechaLarga = fechaLarga;
@@ -98,8 +100,12 @@ export class ConflictosComponent implements OnInit {
     return [...grupos.entries()].map(([fecha, items]) => ({ fecha, items }));
   });
 
-  ngOnInit(): void {
-    void this.cargar();
+  constructor() {
+    // Carga al entrar y cada vez que se guarda algo en un panel (ej. se corrigió un conflicto)
+    effect(() => {
+      this.paneles.cambios();
+      untracked(() => void this.cargar());
+    });
   }
 
   protected async cargar(): Promise<void> {

@@ -282,7 +282,7 @@ interface FormTicket extends Partial<Atencion> {
     <!-- FORMULARIO -->
     <app-modal [abierto]="!!form()" [titulo]="form()?.id ? 'Editar ticket' : 'Nuevo ticket'" ancho="xl" (cerrar)="form.set(null)">
       @if (form(); as f) {
-        <form class="space-y-4" (ngSubmit)="guardar()" id="form-atencion">
+        <form class="space-y-4" (ngSubmit)="guardar()" id="form-atencion" (keydown.enter)="evitarEnvioConEnter($event)">
           <!-- 1. Categoría -->
           <div>
             <label class="etiqueta"><span class="paso">1</span> ¿Qué tipo de atención?</label>
@@ -542,7 +542,7 @@ interface FormTicket extends Partial<Atencion> {
                     <app-icono nombre="buscar" [tamano]="15" class="absolute top-1/2 left-2.5 -translate-y-1/2 text-slate-400" />
                     <input #buscarColab class="campo !py-1.5 !pl-8" placeholder="Escribe un nombre para buscar…" maxlength="40" autocomplete="off"
                            [value]="busquedaColab()" (input)="busquedaColab.set(buscarColab.value)"
-                           (keydown.enter)="$event.preventDefault(); elegirPrimero(f)" (keydown.escape)="colabAbierto.set(false)">
+                           (keydown.enter)="$event.preventDefault(); elegirPrimero(f)" (keydown.escape)="$event.stopPropagation(); $event.preventDefault(); colabAbierto.set(false)">
                   </div>
                 </div>
                 @for (grupo of gruposPersonal(); track grupo.titulo) {
@@ -765,14 +765,26 @@ export class AtencionesListaComponent implements OnInit {
     const filtro: FiltroOperacion = {
       participante: this.soloMios ? this.auth.perfil()?.id : undefined, desde: this.desde || undefined, hasta: this.hasta || undefined, ambienteId: this.filtroLab,
     };
+    // Si se cambia de filtro antes de que llegue la respuesta, la vieja se descarta
+    const n = ++this.consulta;
     try {
       const [lista, solicitudes] = await Promise.all([this.operacion.listarAtenciones(filtro), this.operacion.solicitudesBaja()]);
+      if (n !== this.consulta) return;
       this.lista.set(lista);
       this.solicitudes.set(solicitudes);
     } catch (e) {
-      this.notificaciones.error(e, 'No se cargaron los tickets');
+      if (n === this.consulta) this.notificaciones.error(e, 'No se cargaron los tickets');
     }
   }
+
+  /** Enter en un campo de texto no guarda el ticket a medias (se guarda con el botón) */
+  protected evitarEnvioConEnter(evento: Event): void {
+    const destino = evento.target as HTMLElement;
+    if (destino.tagName === 'INPUT') evento.preventDefault();
+  }
+
+  /** Número de la última consulta de la lista */
+  private consulta = 0;
 
   protected alternar(clave: string): void {
     this.abiertos.update((s) => {
@@ -989,7 +1001,19 @@ export class AtencionesListaComponent implements OnInit {
     const quitar = g.tickets.filter((t) => t.pc_id !== null && !pcs.includes(t.pc_id));
     // Si se quitaron todas las PCs, el primer ticket queda como ticket del laboratorio
     const conservar = pcs.length ? g.tickets.filter((t) => t.pc_id !== null && pcs.includes(t.pc_id)) : [g.primero];
-    await this.operacion.actualizarAtenciones(conservar.map((t) => t.id), { ...comun, lote, ...(pcs.length ? {} : { pc_id: null }) });
+    // Al editar no se toca el estado de cada ticket (pendiente/resuelto)
+    const { estado: _estado, resuelto_por: _por, resuelto_en: _en, ...datos } = comun;
+    const cambios = { ...datos, lote, ...(pcs.length ? {} : { pc_id: null }) };
+    if (g.primero.tipo === 'correctivo' && conservar.length > 1) {
+      // Correctivo: cada PC tiene su propia ficha (falla, diagnóstico, resultado). Los textos editados son
+      // los de la primera; a las demás solo se les cambian los datos comunes
+      const { descripcion: _d, solucion: _s, detalles: _det, ...comunes } = cambios;
+      const primero = conservar.find((t) => t.id === g.primero.id);
+      if (primero) await this.operacion.actualizarAtenciones([primero.id], cambios);
+      await this.operacion.actualizarAtenciones(conservar.filter((t) => t !== primero).map((t) => t.id), comunes);
+    } else {
+      await this.operacion.actualizarAtenciones(conservar.map((t) => t.id), cambios);
+    }
     const nuevas = pcs.filter((id) => !actuales.has(id));
     const creados = await this.operacion.crearAtenciones(nuevas.map((pc_id) => ({ ...comun, pc_id, lote, turno_trabajo_id: g.primero.turno_trabajo_id })));
     const borrar = quitar.filter((t) => !conservar.includes(t)).map((t) => t.id);
@@ -1069,7 +1093,7 @@ export class AtencionesListaComponent implements OnInit {
         a.fuera_de_turno ? 'Sí' : '',
       ];
     });
-    descargarCsv('tickets', ['Fecha', 'Tipo', 'Laboratorio', 'PC', 'Docente / persona', 'Prioridad', 'Estado', 'Motivo / falla',
+    descargarCsv('tickets.csv', ['Fecha', 'Tipo', 'Laboratorio', 'PC', 'Docente / persona', 'Prioridad', 'Estado', 'Motivo / falla',
       'Solución', 'Detalles', 'Registró', 'Colaboradores', 'Fuera de turno'], filas);
   }
 }

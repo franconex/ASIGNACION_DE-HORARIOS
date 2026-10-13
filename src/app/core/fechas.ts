@@ -24,9 +24,9 @@ export function deIso(texto: string): Date {
   return new Date(anio, mes - 1, dia);
 }
 
-/** Fecha de hoy en 'YYYY-MM-DD' */
+/** Fecha de hoy en 'YYYY-MM-DD' en La Paz (no la de la computadora: otra zona daría otro día de noche) */
 export function hoyIso(): string {
-  return aIso(new Date());
+  return fechaActual('America/La_Paz');
 }
 
 /** Suma días a una fecha ISO */
@@ -71,6 +71,8 @@ export function seSolapan(ini1: string, fin1: string, ini2: string, fin2: string
 
 /** 'martes 13/10/2026' */
 export function fechaLarga(texto: string): string {
+  // Sin fecha (ej. un campo de fecha vacío): no se rompe la pantalla
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(texto ?? '')) return '';
   const fecha = deIso(texto);
   return `${DIAS_SEMANA[diaIso(texto)].toLowerCase()} ${String(fecha.getDate()).padStart(2, '0')}/` +
     `${String(fecha.getMonth() + 1).padStart(2, '0')}/${fecha.getFullYear()}`;

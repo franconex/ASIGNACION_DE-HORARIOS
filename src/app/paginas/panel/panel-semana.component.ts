@@ -123,9 +123,14 @@ export class PanelSemanaComponent {
   protected readonly sumarDias = sumarDias;
   protected readonly diaIso = diaIso;
   protected readonly diasCortos = DIAS_CORTOS;
-  protected readonly hoy = fechaActual(environment.zonaHoraria);
+  /** Hoy y la hora se calculan al momento (la página puede quedar abierta horas) */
+  protected get hoy(): string {
+    return fechaActual(environment.zonaHoraria);
+  }
+  private get ahora(): number {
+    return aMinutos(horaActual(environment.zonaHoraria));
+  }
   protected readonly lunesHoy = sumarDias(this.hoy, -(diaIso(this.hoy) - 1));
-  private readonly ahora = aMinutos(horaActual(environment.zonaHoraria));
 
   protected readonly laboratorios = computed(() => this.catalogos.laboratorios());
   protected readonly ambienteId = signal<number>(0);
@@ -160,16 +165,21 @@ export class PanelSemanaComponent {
 
   async cargar(): Promise<void> {
     if (!this.ambienteId()) return;
+    // Si se cambia de semana o de lab antes de que llegue la respuesta, la vieja se descarta
+    const n = ++this.consulta;
+    const ambienteId = this.ambienteId();
     this.cargando.set(true);
     try {
       const datos = await this.ocupacionServicio.ocupaciones(this.lunes(), sumarDias(this.lunes(), 5));
-      this.ocupaciones.set(datos.filter((o) => o.ambiente_id === this.ambienteId()));
+      if (n === this.consulta) this.ocupaciones.set(datos.filter((o) => o.ambiente_id === ambienteId));
     } catch (e) {
-      this.notificaciones.error(e, 'No se pudo cargar el horario');
+      if (n === this.consulta) this.notificaciones.error(e, 'No se pudo cargar el horario');
     } finally {
-      this.cargando.set(false);
+      if (n === this.consulta) this.cargando.set(false);
     }
   }
+
+  private consulta = 0;
 
   protected moverLab(delta: number): void {
     const labs = this.laboratorios();

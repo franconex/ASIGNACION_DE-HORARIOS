@@ -68,7 +68,9 @@ export class LoginComponent implements OnInit {
 
   /** Si vuelve de Google con un usuario desactivado, lo avisa y cierra la sesión */
   async ngOnInit(): Promise<void> {
-    if (this.auth.sesion() && !this.auth.perfil()?.activo) {
+    if (this.auth.sesion() && this.auth.perfilSinConexion()) {
+      this.error.set('No se pudo conectar con el sistema. Revise su internet y recargue la página.');
+    } else if (this.auth.sesion() && !this.auth.perfil()?.activo) {
       this.error.set('Su usuario está desactivado. Solicite al administrador que lo habilite.');
       await this.auth.cerrarSesion();
     }

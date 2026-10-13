@@ -59,9 +59,23 @@ export class AuthService {
       this.perfil.set(null);
       return;
     }
-    const { data } = await this.supabase.cliente.from('perfiles').select('*').eq('id', sesion.user.id).maybeSingle();
-    this.perfil.set((data as Perfil) ?? null);
+    // Un corte de red no debe parecer "usuario desactivado": se reintenta y, si sigue fallando,
+    // se conserva el perfil que ya se tenía de ese usuario
+    for (let intento = 1; intento <= 3; intento++) {
+      const { data, error } = await this.supabase.cliente.from('perfiles').select('*').eq('id', sesion.user.id).maybeSingle();
+      if (!error) {
+        this.perfilSinConexion.set(false);
+        this.perfil.set((data as Perfil) ?? null);
+        return;
+      }
+      if (intento < 3) await new Promise((listo) => setTimeout(listo, 800 * intento));
+    }
+    this.perfilSinConexion.set(true);
+    if (this.perfil()?.id !== sesion.user.id) this.perfil.set(null);
   }
+
+  /** No se pudo leer el perfil (sin conexión): no es lo mismo que un usuario desactivado */
+  readonly perfilSinConexion = signal(false);
 
   /** Vuelve a leer el perfil (ej. para ver si el admin ya asignó un rol) */
   async recargarPerfil(): Promise<void> {
@@ -84,6 +98,10 @@ export class AuthService {
       throw new Error(error.message === 'Invalid login credentials' ? 'Correo o contraseña incorrectos.' : error.message);
     }
     await this.aplicarSesion(data.session);
+    if (this.perfilSinConexion()) {
+      await this.cerrarSesion();
+      throw new Error('No se pudo conectar con el sistema. Revise su internet e intente de nuevo.');
+    }
     const perfil = this.perfil();
     if (!perfil || !perfil.activo) {
       await this.cerrarSesion();
@@ -94,7 +112,8 @@ export class AuthService {
   /** Crea la contraseña (para entrar también con correo) y guarda el nombre */
   async completarCuenta(nombre: string, password: string): Promise<void> {
     const { error } = await this.supabase.cliente.auth.updateUser({ password });
-    if (error) {
+    // 'same_password': la contraseña ya quedó guardada en un intento anterior; se sigue con el nombre
+    if (error && error.code !== 'same_password') {
       throw new Error(error.code === 'weak_password' ? 'La contraseña es muy débil. Use al menos 8 caracteres con letras y números.'
         : error.code === 'reauthentication_needed' ? 'Por seguridad, cierre sesión y vuelva a entrar antes de crear la contraseña.'
         : error.message);
