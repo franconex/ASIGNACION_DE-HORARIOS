@@ -28,7 +28,9 @@ interface Dashboard {
   por_lab: { id: number; codigo: string; color: string; tickets: number; pendientes: number; pcs: ConteoPcs }[];
   auxiliares: {
     id: string; nombre: string; rol: Rol; turno: TurnoCodigo | null;
-    registrados: number; trabajos: number; colaboraciones: number; participaciones: number;
+    /** Puntos del periodo (mismos que la Competencia) y cuántos vienen de colaborar */
+    puntos: number; puntos_colaboracion: number;
+    registrados: number; trabajos: number; colaboraciones: number;
     resueltos: number; pcs_atendidas: number; reportes: number; tareas_hechas: number;
   }[];
   pcs: ConteoPcs & { docentes: number };
@@ -348,10 +350,10 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
           <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
             <div>
               <h2 class="flex items-center gap-2 font-semibold"><app-icono nombre="trofeo" [tamano]="17" /> Ranking de auxiliares</h2>
-              <p class="text-xs text-slate-500">Tickets en los que participó cada uno (incluye a los encargados de auxiliares)</p>
+              <p class="text-xs text-slate-500">Puntos del periodo, igual que en Competencia: cada trabajo suma según su tipo y uno con varias PCs cuenta una vez</p>
             </div>
             <div class="flex gap-3 text-xs text-slate-600">
-              <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--serie-1)]"></span> Registró</span>
+              <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--serie-1)]"></span> Sus trabajos</span>
               <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--serie-2)]"></span> Colaboró</span>
             </div>
           </div>
@@ -359,22 +361,23 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
             @for (a of d.auxiliares; track a.id; let i = $index) {
               <div class="grid cursor-default grid-cols-[1.5rem_9rem_1fr] items-center gap-2 rounded-md px-1 py-0.5 hover:bg-slate-100/60"
                    (mousemove)="verTip($event, a.nombre, [
-                     { color: 'var(--serie-1)', texto: 'Registró', valor: a.registrados + ' tickets (' + a.trabajos + ' trabajos)' },
-                     { color: 'var(--serie-2)', texto: 'Colaboró', valor: a.colaboraciones },
+                     { texto: 'Puntos', valor: a.puntos },
+                     { color: 'var(--serie-1)', texto: 'Sus trabajos', valor: a.trabajos + ' (' + (a.puntos - a.puntos_colaboracion) + ' pts)' },
+                     { color: 'var(--serie-2)', texto: 'Colaboró', valor: a.colaboraciones + ' (' + a.puntos_colaboracion + ' pts)' },
                      { texto: 'Resolvió', valor: a.resueltos },
                      { texto: 'PCs atendidas', valor: a.pcs_atendidas }])"
                    (mouseleave)="tip.set(null)">
-                <span class="text-center text-sm font-bold" [class]="i === 0 && a.participaciones ? 'text-amber-600' : 'text-slate-400'">{{ i + 1 }}</span>
+                <span class="text-center text-sm font-bold" [class]="i === 0 && a.puntos ? 'text-amber-600' : 'text-slate-400'">{{ i + 1 }}</span>
                 <span class="min-w-0">
                   <span class="block truncate text-sm font-medium">{{ a.nombre }}</span>
-                  <span class="block text-[10px] text-slate-400">{{ a.rol === 'encargado' ? nombreRol.encargado : a.turno ? turnos[a.turno] : nombreRol[a.rol] }}</span>
+                  <span class="block text-[10px] text-slate-400">{{ a.turno ? turnos[a.turno] : 'Sin turno' }}{{ a.rol === 'encargado' ? ' · ' + nombreRol.encargado : '' }}</span>
                 </span>
                 <span class="flex items-center gap-2">
-                  <span class="flex h-5 min-w-0 gap-[2px]" [style.width.%]="(a.participaciones / topeAux()) * 85">
-                    @if (a.registrados) { <span class="h-full rounded-l-[4px] bg-[var(--serie-1)]" [class.rounded-r-[4px]]="!a.colaboraciones" [style.flex-grow]="a.registrados"></span> }
-                    @if (a.colaboraciones) { <span class="h-full rounded-r-[4px] bg-[var(--serie-2)]" [class.rounded-l-[4px]]="!a.registrados" [style.flex-grow]="a.colaboraciones"></span> }
+                  <span class="flex h-5 min-w-0 gap-[2px]" [style.width.%]="(a.puntos / topeAux()) * 85">
+                    @if (a.puntos - a.puntos_colaboracion) { <span class="h-full rounded-l-[4px] bg-[var(--serie-1)]" [class.rounded-r-[4px]]="!a.puntos_colaboracion" [style.flex-grow]="a.puntos - a.puntos_colaboracion"></span> }
+                    @if (a.puntos_colaboracion) { <span class="h-full rounded-r-[4px] bg-[var(--serie-2)]" [class.rounded-l-[4px]]="a.puntos === a.puntos_colaboracion" [style.flex-grow]="a.puntos_colaboracion"></span> }
                   </span>
-                  <span class="text-sm font-semibold tabular-nums">{{ a.participaciones }}</span>
+                  <span class="text-sm font-semibold tabular-nums">{{ a.puntos }} pts</span>
                 </span>
               </div>
             } @empty {
@@ -390,8 +393,8 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
           <table class="tabla">
             <thead>
               <tr>
-                <th>Auxiliar</th><th>Turno</th><th class="text-right">Participó</th><th class="text-right">Registró</th>
-                <th class="text-right">Trabajos</th><th class="text-right">Colaboró</th><th class="text-right">Resolvió</th>
+                <th>Auxiliar</th><th>Turno</th><th class="text-right">Puntos</th><th class="text-right">Trabajos</th>
+                <th class="text-right">Tickets</th><th class="text-right">Colaboró</th><th class="text-right">Resolvió</th>
                 <th class="text-right">PCs</th><th class="text-right">Reportes</th><th class="text-right">Tareas hechas</th>
               </tr>
             </thead>
@@ -399,10 +402,10 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
               @for (a of d.auxiliares; track a.id) {
                 <tr>
                   <td class="font-medium">{{ a.nombre }}</td>
-                  <td class="text-sm text-slate-500">{{ a.rol === 'encargado' ? nombreRol.encargado : a.turno ? turnos[a.turno] : '—' }}</td>
-                  <td class="text-right font-semibold tabular-nums">{{ a.participaciones }}</td>
-                  <td class="text-right tabular-nums">{{ a.registrados }}</td>
+                  <td class="text-sm text-slate-500">{{ a.turno ? turnos[a.turno] : '—' }}@if (a.rol === 'encargado') { <span class="chip ml-1 bg-marca-50 text-marca-700">{{ nombreRol.encargado }}</span> }</td>
+                  <td class="text-right font-semibold tabular-nums">{{ a.puntos }}</td>
                   <td class="text-right tabular-nums">{{ a.trabajos }}</td>
+                  <td class="text-right tabular-nums">{{ a.registrados }}</td>
                   <td class="text-right tabular-nums">{{ a.colaboraciones }}</td>
                   <td class="text-right tabular-nums">{{ a.resueltos }}</td>
                   <td class="text-right tabular-nums">{{ a.pcs_atendidas }}</td>
@@ -1112,7 +1115,7 @@ export class DesempenoComponent implements OnInit {
     const k = this.datos()?.kpis;
     return k?.tickets ? Math.round((k.resueltos / k.tickets) * 100) : 0;
   });
-  protected readonly topeAux = computed(() => Math.max(1, ...(this.datos()?.auxiliares ?? []).map((a) => a.participaciones)));
+  protected readonly topeAux = computed(() => Math.max(1, ...(this.datos()?.auxiliares ?? []).map((a) => a.puntos)));
   /** Totales por categoría (docente, técnico, personal, cambios de estado) */
   protected readonly porCategoria = computed(() => {
     const textos: Record<CategoriaTicket, string> = {
@@ -1320,11 +1323,11 @@ export class DesempenoComponent implements OnInit {
     const d = this.datos();
     if (!d) return;
     const filas = d.auxiliares.map((a) => [
-      a.nombre, a.turno ? TURNOS[a.turno] : '', a.participaciones, a.registrados, a.trabajos,
+      a.nombre, a.turno ? TURNOS[a.turno] : '', a.puntos, a.trabajos, a.registrados,
       a.colaboraciones, a.resueltos, a.pcs_atendidas, a.reportes, a.tareas_hechas,
     ]);
     const { desde, hasta } = this.periodo();
     descargarCsv(this.modo() === 'mes' ? `desempeno-${this.mes()}` : `desempeno-${desde}-a-${hasta}`,
-      ['Auxiliar', 'Turno', 'Participó', 'Registró', 'Trabajos', 'Colaboró', 'Resolvió', 'PCs atendidas', 'Reportes de turno', 'Tareas hechas'], filas);
+      ['Auxiliar', 'Turno', 'Puntos', 'Trabajos', 'Tickets', 'Colaboró', 'Resolvió', 'PCs atendidas', 'Reportes de turno', 'Tareas hechas'], filas);
   }
 }

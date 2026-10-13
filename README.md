@@ -102,6 +102,7 @@ En **Laboratorios**, al tocar un laboratorio se abre su **croquis** dibujado com
   | 43 | `43_encargado_habilita_usuarios.sql` | **El encargado habilita cuentas**: `fn_habilitar_usuario(p_usuario)` pasa una cuenta en espera (invitado) a auxiliar activo; la usan el admin y el encargado de auxiliares (desde Auxiliares). El encargado no puede cambiar roles, desactivar ni editar otros perfiles |
   | 44 | `44_fotos_cierre_30_dias.sql` | **Fotos de cierre 30 días**: la foto del cierre de turno dura 30 días desde que se sube (antes vencía a las 12:00 siguientes); la descripción y las tareas se quedan |
   | 45 | `45_competencia_por_reunion.sql` | **Competencia por reunión**: `puntos_tipo` (puntos por tipo de trabajo, ajustables), `periodos_competencia` (cada reunión cierra el periodo con su ranking completo y los puntos usados). `fn_competencia_actual()`, `fn_cerrar_periodo(p_nota)` y `fn_deshacer_ultimo_periodo()` (admin y encargado). Un trabajo con varias PCs cuenta una vez; los tickets no se borran |
+  | 46 | `46_desempeno_puntos_y_turno.sql` | **Desempeño con puntos y turno actual**: el ranking de auxiliares de Desempeño usa los mismos puntos que la Competencia (para el mes o rango elegido) y el turno sale de `turnos_programados` (el vigente hoy), no de `perfiles.turno_habitual`. `fn_ranking_competencia` devuelve `[]` a quien no es admin/encargado |
 
 3. **Primer administrador**
    - **Authentication → Users → Add user**: correo y contraseña, con *Auto Confirm User* marcado.
