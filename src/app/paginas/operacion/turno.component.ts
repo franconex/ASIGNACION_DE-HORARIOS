@@ -164,7 +164,7 @@ function horaLaPaz(): string {
             <p class="mt-1 text-[11px] text-slate-500">Se agregan solas al cierre; no hace falta escribirlas.</p>
           </div>
 
-          <label class="etiqueta mt-4">Foto del armario de llaves <span class="font-normal text-slate-400">(se borra a las 12:00; la descripción se queda)</span></label>
+          <label class="etiqueta mt-4">Foto del armario de llaves <span class="font-normal text-slate-400">(se borra a los 30 días; la descripción se queda)</span></label>
           <label class="flex cursor-pointer items-center gap-3 rounded-lg border-2 border-dashed border-slate-300 p-3 hover:border-marca-400">
             @if (vistaFoto()) {
               <img [src]="vistaFoto()" alt="Vista previa" class="h-20 w-20 rounded-md object-cover">
@@ -282,7 +282,7 @@ function horaLaPaz(): string {
             @if (r.foto_path && urlsFotos().get(r.foto_path); as url) {
               <a [href]="url" target="_blank" rel="noopener" class="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
                 <img [src]="url" alt="Foto del armario de llaves" class="h-20 w-20 rounded-md object-cover">
-                <span>Foto del cierre · se borra {{ r.foto_expira | date: 'dd/MM' }} a las 12:00</span>
+                <span>Foto del cierre · se borra el {{ r.foto_expira | date: 'dd/MM' }}</span>
               </a>
             }
             @if (r.tareas?.length) {
@@ -387,7 +387,7 @@ export class TurnoComponent implements OnInit, OnDestroy {
   }
 
   private async cargar(): Promise<void> {
-    // Fotos vencidas (después de las 12:00): se borran; si falla, se reintenta la próxima vez
+    // Fotos vencidas (30 días después de subirlas): se borran; si falla, se reintenta la próxima vez
     await this.op.limpiarFotosReporte().catch((e) => console.error(e));
     try {
       const [reportes, pendientes, programados, rotacion] = await Promise.all([

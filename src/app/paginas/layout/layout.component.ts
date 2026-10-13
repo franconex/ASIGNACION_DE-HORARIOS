@@ -150,6 +150,7 @@ export class LayoutComponent implements OnInit {
     { ruta: '/atenciones', texto: 'Atenciones', icono: 'registros', visible: (a) => a.puedeOperar() },
     { ruta: '/objetos-perdidos', texto: 'Objetos perdidos', icono: 'objeto', visible: (a) => a.puedeOperar() },
     { ruta: '/desempeno', texto: 'Desempeño', icono: 'grafico', visible: (a) => a.puedeGestionarAuxiliares() },
+    { ruta: '/competencia', texto: 'Competencia', icono: 'trofeo', visible: (a) => a.puedeGestionarAuxiliares() },
     { ruta: '/auxiliares', texto: 'Auxiliares', icono: 'usuarios', visible: (a) => a.puedeGestionarAuxiliares() },
     { ruta: '/laboratorios', texto: 'Laboratorios', icono: 'laboratorio' },
     { ruta: '/registros', texto: 'Registros', icono: 'registros' },

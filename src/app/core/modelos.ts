@@ -367,7 +367,7 @@ export interface ReporteTurno {
   hora_inicio_turno?: string | null;
   hora_fin_turno?: string | null;
   minutos_retraso?: number | null;
-  /** Foto del cierre (armario de llaves); se borra a las 12:00 siguientes */
+  /** Foto del cierre (armario de llaves); se borra a los 30 días */
   foto_path?: string | null;
   foto_expira?: string | null;
   /** Relaciones embebidas */

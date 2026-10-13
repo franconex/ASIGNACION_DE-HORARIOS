@@ -353,7 +353,7 @@ export class OperacionService {
     return mapa;
   }
 
-  /** Borra las fotos de cierre vencidas (después de las 12:00); la descripción se queda */
+  /** Borra las fotos de cierre vencidas (30 días después de subirlas); la descripción se queda */
   async limpiarFotosReporte(): Promise<void> {
     const { data, error } = await this.cliente.rpc('fn_limpiar_fotos_reporte');
     if (error) throw new ErrorSistema(error);

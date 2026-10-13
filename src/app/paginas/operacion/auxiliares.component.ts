@@ -8,17 +8,14 @@ import { NotificacionesService } from '../../core/notificaciones.service';
 import { ConfirmacionService } from '../../core/confirmacion.service';
 import { OperacionService, turnosDeHoy } from '../../core/operacion.service';
 import { environment } from '../../../environments/environment';
-import { aMinutos, diaIso, fechaActual, fechaCorta, fechaLarga, hhmm, sumarDias } from '../../core/fechas';
-import { CatalogosService } from '../../core/catalogos.service';
+import { aMinutos, diaIso, fechaActual, fechaCorta, hhmm } from '../../core/fechas';
 
 const NOMBRE_TURNO: Record<string, string> = { M: 'Mañana', MD: 'Mediodía', T: 'Tarde', N: 'Noche' };
-/** Orden de los turnos: también es el orden de "Rotar todos" (el último vuelve al primero) */
-const ORDEN_TURNOS: TurnoCodigo[] = ['M', 'MD', 'T', 'N'];
 
 /**
- * Apartado de Auxiliares (admin y encargado): un tablero con una columna por
- * turno donde se mueve a cada persona (o se rotan todos de una vez) desde
- * una fecha; y los sábados, que se reparten solos entre quienes rotan.
+ * Apartado de Auxiliares (admin y encargado): la lista del equipo con su
+ * turno de lunes a viernes (se cambia y vale desde hoy) y los turnos de
+ * sábado (el sábado, el auxiliar y su turno).
  * Los encargados de auxiliares también rotan y aparecen aquí (pero cierran
  * cualquier turno, no solo el suyo).
  */
@@ -29,7 +26,7 @@ const ORDEN_TURNOS: TurnoCodigo[] = ['M', 'MD', 'T', 'N'];
     <header class="mb-4 flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 class="text-2xl font-bold">Auxiliares</h1>
-        <p class="mt-0.5 text-sm text-slate-600">Elige desde cuándo, mueve a cada persona a su turno (o usa Rotar todos) y guarda.</p>
+        <p class="mt-0.5 text-sm text-slate-600">El turno de cada auxiliar y los sábados.</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <button class="btn-secundario" (click)="abrirFallas()"><app-icono nombre="mantenimiento" [tamano]="16" /> Lista de fallas</button>
@@ -120,202 +117,76 @@ const ORDEN_TURNOS: TurnoCodigo[] = ['M', 'MD', 'T', 'N'];
       </section>
     }
 
-    <!-- TABLERO DE TURNOS: una columna por turno; se mueve a las personas entre columnas -->
-    <section class="tarjeta mb-8 p-3">
-      <div class="mb-3 flex flex-wrap items-end gap-3">
-        <div>
-          <p class="etiqueta">Los turnos empiezan el</p>
-          <div class="flex flex-wrap items-center gap-1.5">
-            @for (a of atajosFecha(); track a.texto) {
-              <button type="button" class="chip cursor-pointer py-1.5" [class]="desde() === a.fecha ? 'bg-marca-600 text-white' : 'bg-slate-200 text-slate-700'"
-                      (click)="desde.set(a.fecha)">{{ a.texto }}</button>
-            }
-            <input type="date" class="campo !w-40 !py-1" [ngModel]="desde()" (ngModelChange)="$event && desde.set($event)" aria-label="Fecha en que empiezan los turnos">
-          </div>
-        </div>
-        <div class="ml-auto flex flex-wrap gap-2">
-          <button class="btn-secundario" (click)="rotarTodos()" title="Mañana → Mediodía → Tarde → Noche → Mañana">
-            <app-icono nombre="repetir" [tamano]="16" /> Rotar todos
-          </button>
-          @if (cambios().length) {
-            <button class="btn-fantasma" (click)="deshacer()"><app-icono nombre="restaurar" [tamano]="16" /> Deshacer</button>
-          }
-          <button class="btn-primario" (click)="guardarTurnos()" [disabled]="guardando() || !cambios().length">
-            <app-icono nombre="check" [tamano]="16" />
-            {{ guardando() ? 'Guardando…' : cambios().length ? 'Guardar ' + cambios().length + (cambios().length === 1 ? ' cambio' : ' cambios') : 'Sin cambios' }}
-          </button>
-        </div>
-      </div>
+    <!-- TURNO DE LUNES A VIERNES: se elige y queda guardado al momento -->
+    <p class="mb-2 text-sm text-slate-600">Elige el turno de lunes a viernes de cada auxiliar. Se guarda al momento y vale desde hoy.</p>
 
-      <p class="mb-2 text-sm" [class]="seleccionado() ? 'font-medium text-marca-700' : 'text-slate-500'">
-        @if (seleccionado(); as id) { Ahora toca la columna del nuevo turno de {{ nombres().get(id) }}. }
-        @else { Toca a una persona y luego la columna de su nuevo turno. En la PC también puedes arrastrarla. }
-      </p>
-
-      <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        @for (c of columnas; track c.turno) {
-          <div class="min-h-28 rounded-lg border-2 p-2 transition"
-               [class]="seleccionado() ? 'cursor-pointer border-dashed border-marca-400 bg-marca-50/40 hover:bg-marca-50' : 'border-slate-200'"
-               (click)="moverA(c.turno)" (dragover)="$event.preventDefault()" (drop)="$event.preventDefault(); moverA(c.turno)">
-            <p class="mb-2 flex items-baseline justify-between gap-2">
-              <span class="font-semibold">{{ c.texto }}</span>
-              <span class="text-xs text-slate-500">{{ horarioDe(c.turno) }} · {{ enColumna(c.turno).length }}</span>
-            </p>
-            <div class="flex flex-wrap gap-1.5">
-              @for (u of enColumna(c.turno); track u.id) {
-                <button type="button" draggable="true" class="chip cursor-pointer py-1.5 text-sm"
-                        [class]="seleccionado() === u.id ? 'bg-marca-600 text-white ring-2 ring-marca-300' : cambiado(u.id) ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-700'"
-                        (dragstart)="seleccionado.set(u.id)" (click)="$event.stopPropagation(); elegirPersona(u.id)"
-                        [attr.aria-pressed]="seleccionado() === u.id" [title]="u.nombre_completo">
-                  {{ nombreCorto(u.nombre_completo) }}
-                  @if (cambiado(u.id)) { <span class="text-[10px] opacity-75">antes: {{ textoTurnoBase(u.id) }}</span> }
-                </button>
-              } @empty {
-                <p class="text-xs text-slate-400">Nadie</p>
-              }
-            </div>
-          </div>
-        }
-      </div>
-
-      @if (enColumna(null).length) {
-        <div class="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg bg-slate-50 p-2">
-          <span class="text-xs font-semibold text-slate-500">Sin turno:</span>
-          @for (u of enColumna(null); track u.id) {
-            <button type="button" draggable="true" class="chip cursor-pointer py-1.5 text-sm"
-                    [class]="seleccionado() === u.id ? 'bg-marca-600 text-white ring-2 ring-marca-300' : 'bg-white text-slate-700 ring-1 ring-slate-200'"
-                    (dragstart)="seleccionado.set(u.id)" (click)="elegirPersona(u.id)" [title]="u.nombre_completo">{{ nombreCorto(u.nombre_completo) }}</button>
-          }
-        </div>
+    <!-- tarjetas en el celular -->
+    <div class="mb-8 space-y-2 md:hidden">
+      @for (u of activos(); track u.id) {
+        <article class="tarjeta p-3">
+          <p class="truncate font-medium">{{ u.nombre_completo }}@if (u.rol === 'encargado') { <span class="chip ml-1 bg-marca-50 text-marca-700">{{ nombreRol.encargado }}</span> }</p>
+          <p class="mb-2 truncate text-xs text-slate-500">{{ u.correo }}</p>
+          <select class="campo" [ngModel]="turnoDe(u.id)" (ngModelChange)="cambiarTurno(u, $event)" [disabled]="guardando()" [attr.aria-label]="'Turno de ' + u.nombre_completo">
+            <option [ngValue]="null" disabled>Sin turno</option>
+            <option value="M">Mañana</option><option value="MD">Mediodía</option><option value="T">Tarde</option><option value="N">Noche</option>
+          </select>
+        </article>
+      } @empty {
+        <p class="tarjeta py-8 text-center text-sm text-slate-500">No hay auxiliares activos.</p>
       }
-      @if (!activos().length) {
-        <p class="py-6 text-center text-sm text-slate-500">No hay auxiliares activos.</p>
-      }
-      <p class="mt-2 text-xs text-slate-400">Los cambios (en amarillo) no se guardan hasta que tocas Guardar. Quien no cambia sigue con su turno.</p>
-    </section>
+    </div>
 
-    <!-- ASIGNACIONES DE TURNO GUARDADAS: para corregir o borrar una que se puso mal -->
-    <section class="mb-8">
-      <h2 class="mb-1 text-lg font-semibold">Asignaciones de turno</h2>
-      <p class="mb-2 text-sm text-slate-600">Cada vez que guardas turnos queda una asignación con su fecha de inicio. Si te equivocaste, bórrala completa o quita solo a una persona: vuelve a valer el turno que tenía antes.</p>
-      <div class="space-y-2">
-        @for (g of asignaciones(); track g.desde) {
-          <article class="tarjeta p-3">
-            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <p class="font-semibold">
-                <span class="capitalize">Desde el {{ fechaLarga(g.desde) }}</span>
-                <span class="chip ml-1" [class]="g.estado === 'vigente' ? 'bg-emerald-100 text-emerald-700' : g.estado === 'proxima' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-600'">
-                  {{ g.estado === 'vigente' ? 'Vigente' : g.estado === 'proxima' ? 'Próxima' : 'Anterior' }}
-                </span>
-                <span class="ml-1 text-xs font-normal text-slate-500">{{ g.turnos.length }} persona(s)</span>
-              </p>
-              <button class="btn-secundario btn-sm !border-red-200 !text-red-600" (click)="eliminarAsignacion(g.desde, g.turnos)" [disabled]="guardando()">
-                <app-icono nombre="eliminar" [tamano]="15" /> Eliminar toda la asignación
-              </button>
-            </div>
-            <div class="flex flex-wrap gap-1.5">
-              @for (t of g.turnos; track t.id) {
-                <span class="chip gap-1 bg-slate-100 py-1 text-slate-700">
-                  {{ t.perfil?.nombre_completo || '¿?' }} · <b>{{ nombreTurno[t.turno] }}</b>
-                  <button class="ml-0.5 rounded-full p-0.5 text-red-600 hover:bg-red-100" (click)="eliminarTurno(t)" [disabled]="guardando()"
-                          [attr.aria-label]="'Quitar a ' + (t.perfil?.nombre_completo || 'esta persona') + ' de esta asignación'" title="Quitar solo a esta persona">
-                    <app-icono nombre="eliminar" [tamano]="13" />
-                  </button>
-                </span>
-              }
-            </div>
-          </article>
-        } @empty {
-          <p class="tarjeta py-6 text-center text-sm text-slate-500">Aún no hay turnos asignados.</p>
-        }
-      </div>
-    </section>
-
-    <!-- ROTACIÓN DE SÁBADOS: uno o varios auxiliares por sábado, cada uno con su turno -->
-    <section>
-      <h2 class="mb-1 text-lg font-semibold">Turnos de sábado</h2>
-      <p class="mb-2 text-sm text-slate-600">Marca quiénes rotan, elige cuántos sábados y el sistema los reparte por turnos. El sábado vale este turno (no el de lunes a viernes) y solo ellos cierran turno ese día.</p>
-      <div class="tarjeta mb-3 space-y-4 p-3">
-        <div>
-          <p class="etiqueta">Quiénes rotan los sábados <span class="font-normal text-slate-400">(toca para cambiar)</span></p>
-          <div class="flex flex-wrap gap-1.5">
-            @for (u of activos(); track u.id) {
-              <button type="button" class="chip cursor-pointer py-1.5"
-                      [class]="u.sabado_rotativo ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'"
-                      (click)="alternarSabado(u)">{{ u.nombre_completo }}</button>
-            }
-          </div>
-        </div>
-
-        <div class="flex flex-wrap items-end gap-3">
-          <div><label class="etiqueta" for="gen-desde">Desde el sábado</label>
-            <input id="gen-desde" type="date" class="campo !w-44" [ngModel]="genDesde()" (ngModelChange)="genDesde.set($event)"></div>
-          <div><label class="etiqueta" for="gen-cant">Cuántos sábados</label>
-            <input id="gen-cant" type="number" min="1" max="12" class="campo !w-24" [ngModel]="genCantidad()" (ngModelChange)="genCantidad.set(+$event || 1)"></div>
-          <div>
-            <p class="etiqueta">Turnos de cada sábado</p>
-            <div class="flex flex-wrap gap-1.5">
-              @for (c of columnas; track c.turno) {
-                <button type="button" class="chip cursor-pointer py-1.5"
-                        [class]="genTurnos().includes(c.turno) ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'"
-                        (click)="alternarTurnoSabado(c.turno)">{{ c.texto }}</button>
-              }
-            </div>
-          </div>
-        </div>
-
-        @if (propuesta().length) {
-          <div class="rounded-lg bg-slate-50 p-2">
-            <p class="mb-1 text-xs font-semibold text-slate-500">Así quedan (se reparte por turnos, empezando por quien hace más que no trabaja un sábado):</p>
-            <ul class="space-y-1 text-sm">
-              @for (p of propuesta(); track p.fecha) {
-                <li class="flex flex-wrap gap-x-2">
-                  <span class="w-28 font-medium">{{ fechaCorta(p.fecha) }}</span>
-                  @if (p.motivo) { <span class="text-slate-400">{{ p.motivo }} — se salta</span> }
-                  @else {
-                    @for (a of p.filas; track a.auxiliar_id) { <span>{{ nombres().get(a.auxiliar_id) }} <span class="text-slate-500">({{ nombreTurno[a.turno] }})</span></span> }
-                  }
-                </li>
-              }
-            </ul>
-          </div>
-        }
-        <button class="btn-primario" (click)="generarSabados()" [disabled]="guardando() || !filasPropuesta().length">
-          <app-icono nombre="calendario" [tamano]="16" /> Guardar {{ sabadosPropuestos() }} sábado(s)
-        </button>
-
-        <details class="border-t border-slate-100 pt-3">
-          <summary class="cursor-pointer text-sm font-medium text-marca-700">Agregar un sábado a mano</summary>
-          <div class="mt-3 space-y-3">
-            <div class="flex flex-wrap items-end gap-3">
-              <div><label class="etiqueta" for="sab-fecha">Sábado</label><input id="sab-fecha" type="date" class="campo !w-44" [(ngModel)]="nueva.fecha"></div>
-              <div>
-                <label class="etiqueta" for="sab-turno">Turno</label>
-                <select id="sab-turno" class="campo !w-32" [(ngModel)]="nueva.turno">
-                  <option [ngValue]="null">—</option>
+    <!-- tabla en PC -->
+    <div class="tarjeta mb-8 hidden overflow-x-auto md:block">
+      <table class="tabla">
+        <thead><tr><th>Auxiliar</th><th>Turno de lunes a viernes</th></tr></thead>
+        <tbody>
+          @for (u of activos(); track u.id) {
+            <tr>
+              <td>
+                <p class="font-medium">{{ u.nombre_completo }}@if (u.rol === 'encargado') { <span class="chip ml-1 bg-marca-50 text-marca-700">{{ nombreRol.encargado }}</span> }</p>
+                <p class="text-xs text-slate-500">{{ u.correo }}</p>
+              </td>
+              <td>
+                <select class="campo !w-40 !py-1" [ngModel]="turnoDe(u.id)" (ngModelChange)="cambiarTurno(u, $event)" [disabled]="guardando()" [attr.aria-label]="'Turno de ' + u.nombre_completo">
+                  <option [ngValue]="null" disabled>Sin turno</option>
                   <option value="M">Mañana</option><option value="MD">Mediodía</option><option value="T">Tarde</option><option value="N">Noche</option>
                 </select>
-              </div>
-              <div class="min-w-48 flex-1"><label class="etiqueta" for="sab-nota">Nota</label><input id="sab-nota" maxlength="200" class="campo" [(ngModel)]="nueva.nota" placeholder="Opcional"></div>
-            </div>
-            <div>
-              <p class="etiqueta">Auxiliares ({{ nueva.auxiliares.length }} elegidos)</p>
-              <div class="flex flex-wrap gap-1.5">
-                @for (u of activos(); track u.id) {
-                  <button type="button" class="chip cursor-pointer py-1.5"
-                          [class]="nueva.auxiliares.includes(u.id) ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-700'"
-                          (click)="alternarAuxiliarSabado(u.id)">{{ u.nombre_completo }}</button>
-                }
-              </div>
-            </div>
-            <button class="btn-secundario" (click)="agregarRotacion()" [disabled]="guardando()"><app-icono nombre="agregar" [tamano]="16" /> Agregar al sábado</button>
-          </div>
-        </details>
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="2" class="py-8 text-center text-sm text-slate-500">No hay auxiliares activos.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SÁBADOS: el sábado, el auxiliar y su turno -->
+    <section>
+      <h2 class="mb-1 text-lg font-semibold">Turnos de sábado</h2>
+      <p class="mb-2 text-sm text-slate-600">El sábado vale este turno (no el de lunes a viernes). Si un sábado tiene auxiliares aquí, solo ellos cierran turno ese día.</p>
+      <div class="tarjeta mb-3 flex flex-wrap items-end gap-3 p-3">
+        <div><label class="etiqueta" for="sab-fecha">Sábado</label><input id="sab-fecha" type="date" class="campo !w-44" [(ngModel)]="nueva.fecha"></div>
+        <div class="min-w-48 flex-1">
+          <label class="etiqueta" for="sab-aux">Auxiliar</label>
+          <select id="sab-aux" class="campo" [(ngModel)]="nueva.auxiliarId">
+            <option [ngValue]="null">— Elige —</option>
+            @for (u of activos(); track u.id) { <option [ngValue]="u.id">{{ u.nombre_completo }}</option> }
+          </select>
+        </div>
+        <div>
+          <label class="etiqueta" for="sab-turno">Turno</label>
+          <select id="sab-turno" class="campo !w-32" [(ngModel)]="nueva.turno">
+            <option [ngValue]="null">—</option>
+            <option value="M">Mañana</option><option value="MD">Mediodía</option><option value="T">Tarde</option><option value="N">Noche</option>
+          </select>
+        </div>
+        <button class="btn-primario" (click)="agregarRotacion()" [disabled]="guardando()"><app-icono nombre="agregar" [tamano]="16" /> Agregar</button>
       </div>
 
       <div class="tarjeta overflow-x-auto">
         <table class="tabla">
-          <thead><tr><th>Sábado</th><th>Auxiliar</th><th>Turno</th><th>Nota</th><th></th></tr></thead>
+          <thead><tr><th>Sábado</th><th>Auxiliar</th><th>Turno</th><th></th></tr></thead>
           <tbody>
             @for (r of rotacion(); track r.id) {
               <tr>
@@ -326,11 +197,10 @@ const ORDEN_TURNOS: TurnoCodigo[] = ['M', 'MD', 'T', 'N'];
                     <option value="M">Mañana</option><option value="MD">Mediodía</option><option value="T">Tarde</option><option value="N">Noche</option>
                   </select>
                 </td>
-                <td class="text-sm text-slate-500">{{ r.nota || '—' }}</td>
                 <td class="text-right"><button class="btn-fantasma btn-sm text-red-600" (click)="eliminarRotacion(r)" aria-label="Quitar"><app-icono nombre="eliminar" [tamano]="15" /></button></td>
               </tr>
             } @empty {
-              <tr><td colspan="5" class="py-6 text-center text-sm text-slate-500">Aún no hay sábados asignados.</td></tr>
+              <tr><td colspan="4" class="py-6 text-center text-sm text-slate-500">Aún no hay sábados asignados.</td></tr>
             }
           </tbody>
         </table>
@@ -342,7 +212,6 @@ export class AuxiliaresComponent implements OnInit {
   private readonly op = inject(OperacionService);
   private readonly notificaciones = inject(NotificacionesService);
   private readonly confirmacion = inject(ConfirmacionService);
-  private readonly catalogos = inject(CatalogosService);
 
   protected readonly nombreTurno = NOMBRE_TURNO;
   protected readonly nombreRol = NOMBRE_ROL;
@@ -361,88 +230,11 @@ export class AuxiliaresComponent implements OnInit {
   protected readonly edicionHorarios = signal<HorarioTurno[] | null>(null);
 
   private readonly hoy = fechaActual(environment.zonaHoraria);
-  protected readonly columnas = ORDEN_TURNOS.map((turno) => ({ turno, texto: NOMBRE_TURNO[turno] }));
-
-  /** Fecha en que empiezan los nuevos turnos (una sola para todos); por defecto el lunes próximo */
-  protected readonly desde = signal(sumarDias(this.hoy, 8 - diaIso(this.hoy)));
-  protected readonly atajosFecha = computed(() => [
-    { texto: 'Hoy', fecha: this.hoy },
-    { texto: 'Mañana', fecha: sumarDias(this.hoy, 1) },
-    { texto: 'Lunes próximo', fecha: sumarDias(this.hoy, 8 - diaIso(this.hoy)) },
-  ]);
-  /** Turno movido en el tablero (solo los que se tocaron) */
-  protected readonly movidos = signal<Record<string, TurnoCodigo>>({});
-  /** Persona tocada que espera su columna */
-  protected readonly seleccionado = signal<string | null>(null);
-
   protected readonly activos = computed(() => this.auxiliares().filter((u) => u.activo));
-  protected readonly nombres = computed(() => new Map(this.auxiliares().map((u) => [u.id, u.nombre_completo])));
-  /** Turno que cada uno tendría en la fecha elegida si no se cambia nada */
-  protected readonly base = computed(() => {
-    const desde = this.desde();
-    return new Map(this.activos().map((u) => [u.id, turnosDeHoy(this.turnosProgramados(), u.id, desde).actual?.turno ?? null]));
-  });
-  /** Lo que se va a guardar: los movidos que quedan en un turno distinto al que tenían */
-  protected readonly cambios = computed(() => {
-    const base = this.base();
-    return Object.entries(this.movidos())
-      .filter(([id, turno]) => base.has(id) && base.get(id) !== turno)
-      .map(([perfil_id, turno]) => ({ perfil_id, turno }));
-  });
-
-  /** Sábados: desde qué sábado, cuántos y qué turnos tiene cada uno */
-  protected readonly genDesde = signal('');
-  protected readonly genCantidad = signal(4);
-  protected readonly genTurnos = signal<TurnoCodigo[]>(['M']);
-  /** Quienes rotan, empezando por quien hace más que no trabaja un sábado */
-  private readonly rotativos = computed(() => {
-    const ultimo = new Map<string, string>();
-    for (const r of this.rotacion()) {
-      if (r.auxiliar_id && r.fecha > (ultimo.get(r.auxiliar_id) ?? '')) ultimo.set(r.auxiliar_id, r.fecha);
-    }
-    return this.activos().filter((u) => u.sabado_rotativo)
-      .sort((a, b) => (ultimo.get(a.id) ?? '').localeCompare(ultimo.get(b.id) ?? '') || a.nombre_completo.localeCompare(b.nombre_completo, 'es'));
-  });
-  /** Reparto propuesto: se saltan feriados y sábados que ya tienen gente */
-  protected readonly propuesta = computed(() => {
-    const desde = this.genDesde();
-    const gente = this.rotativos();
-    const turnos = ORDEN_TURNOS.filter((t) => this.genTurnos().includes(t));
-    if (!desde || diaIso(desde) !== 6 || !gente.length || !turnos.length) return [];
-    const ocupados = new Set(this.rotacion().map((r) => r.fecha));
-    const feriados = this.catalogos.mapaFeriados();
-    const cantidad = Math.min(Math.max(this.genCantidad(), 1), 12);
-    let siguiente = 0;
-    return Array.from({ length: cantidad }, (_, i) => {
-      const fecha = sumarDias(desde, i * 7);
-      const motivo = feriados.has(fecha) ? `Feriado: ${feriados.get(fecha)}` : ocupados.has(fecha) ? 'Ya tiene auxiliares' : '';
-      // Nadie repite en el mismo sábado: si hay menos personas que turnos, se llenan los primeros
-      const filas = motivo ? [] : turnos.slice(0, gente.length).map((turno) => ({ fecha, turno, auxiliar_id: gente[siguiente++ % gente.length].id, nota: null }));
-      return { fecha, motivo, filas };
-    });
-  });
-  protected readonly filasPropuesta = computed(() => this.propuesta().flatMap((p) => p.filas));
-  protected readonly sabadosPropuestos = computed(() => this.propuesta().filter((p) => p.filas.length).length);
-
   protected readonly fechaCorta = fechaCorta;
-  protected readonly fechaLarga = fechaLarga;
 
-  /** Turnos guardados agrupados por fecha de inicio (la más nueva primero) */
-  protected readonly asignaciones = computed(() => {
-    const hoy = fechaActual(environment.zonaHoraria);
-    const mapa = new Map<string, TurnoProgramado[]>();
-    for (const t of this.turnosProgramados()) mapa.set(t.desde, [...(mapa.get(t.desde) ?? []), t]);
-    // Vigente = la fecha más reciente que ya empezó
-    const vigente = [...mapa.keys()].filter((d) => d <= hoy).sort().at(-1);
-    return [...mapa].sort(([a], [b]) => b.localeCompare(a)).map(([desde, turnos]) => ({
-      desde,
-      turnos: turnos.sort((x, y) => (x.perfil?.nombre_completo ?? '').localeCompare(y.perfil?.nombre_completo ?? '', 'es')),
-      estado: desde > hoy ? 'proxima' : desde === vigente ? 'vigente' : 'anterior',
-    }));
-  });
-  /** Sábado que se está cargando: uno o varios auxiliares con el mismo turno */
-  protected nueva: { fecha: string; auxiliares: string[]; turno: TurnoCodigo | null; nota: string } =
-    { fecha: '', auxiliares: [], turno: null, nota: '' };
+  /** Sábado que se está cargando: un auxiliar con su turno */
+  protected nueva: { fecha: string; auxiliarId: string | null; turno: TurnoCodigo | null } = { fecha: '', auxiliarId: null, turno: null };
 
   ngOnInit(): void {
     void this.cargar();
@@ -456,9 +248,6 @@ export class AuxiliaresComponent implements OnInit {
       this.invitados.set(inv);
       this.rotacion.set(rot);
       this.turnosProgramados.set(prog);
-      // Los sábados nuevos siguen después del último cargado
-      const ultimo = rot.map((r) => r.fecha).filter((f) => f >= this.hoy).sort().at(-1);
-      this.genDesde.set(ultimo ? sumarDias(ultimo, 7) : sumarDias(this.hoy, ((6 - diaIso(this.hoy) + 7) % 7) || 7));
     } catch (e) {
       this.notificaciones.error(e, 'No se cargaron los auxiliares');
     }
@@ -471,7 +260,7 @@ export class AuxiliaresComponent implements OnInit {
     this.guardando.set(true);
     try {
       await this.op.habilitarUsuario(u.id);
-      this.notificaciones.exito(`${u.nombre_completo} ya es auxiliar. Ponle su turno en el tablero.`);
+      this.notificaciones.exito(`${u.nombre_completo} ya es auxiliar. Ahora elige su turno en la lista.`);
       await this.cargar();
     } catch (e) {
       this.notificaciones.error(e, 'No se habilitó');
@@ -545,153 +334,39 @@ export class AuxiliaresComponent implements OnInit {
     }
   }
 
-  /** Turno con el que aparece en el tablero */
-  private turnoEnTablero(id: string): TurnoCodigo | null {
-    return this.movidos()[id] ?? this.base().get(id) ?? null;
+  /** Turno de lunes a viernes que tiene hoy */
+  protected turnoDe(id: string): TurnoCodigo | null {
+    return turnosDeHoy(this.turnosProgramados(), id, this.hoy).actual?.turno ?? null;
   }
 
-  protected enColumna(turno: TurnoCodigo | null): Perfil[] {
-    return this.activos().filter((u) => this.turnoEnTablero(u.id) === turno);
-  }
-
-  protected cambiado(id: string): boolean {
-    return this.cambios().some((c) => c.perfil_id === id);
-  }
-
-  protected textoTurnoBase(id: string): string {
-    const t = this.base().get(id);
-    return t ? NOMBRE_TURNO[t] : 'sin turno';
-  }
-
-  protected horarioDe(turno: TurnoCodigo): string {
-    const h = this.op.horarios().find((x) => x.turno === turno);
-    return h ? `${hhmm(h.hora_inicio)}–${hhmm(h.hora_fin)}` : '';
-  }
-
-  /** Nombre y primer apellido, para que entren más en cada columna */
-  protected nombreCorto(nombre: string): string {
-    return nombre.split(' ').slice(0, 2).join(' ');
-  }
-
-  protected elegirPersona(id: string): void {
-    this.seleccionado.update((actual) => (actual === id ? null : id));
-  }
-
-  /** Lleva a la persona tocada (o arrastrada) a la columna */
-  protected moverA(turno: TurnoCodigo): void {
-    const id = this.seleccionado();
-    if (!id) return;
-    this.movidos.update((m) => ({ ...m, [id]: turno }));
-    this.seleccionado.set(null);
-  }
-
-  /** Todos pasan al turno siguiente: Mañana → Mediodía → Tarde → Noche → Mañana */
-  protected rotarTodos(): void {
-    const movidos: Record<string, TurnoCodigo> = {};
-    for (const u of this.activos()) {
-      const actual = this.turnoEnTablero(u.id);
-      if (actual) movidos[u.id] = ORDEN_TURNOS[(ORDEN_TURNOS.indexOf(actual) + 1) % ORDEN_TURNOS.length];
-    }
-    this.movidos.set(movidos);
-    this.seleccionado.set(null);
-  }
-
-  protected deshacer(): void {
-    this.movidos.set({});
-    this.seleccionado.set(null);
-  }
-
-  /** Guarda de una vez los turnos cambiados, todos desde la misma fecha */
-  protected async guardarTurnos(): Promise<void> {
-    const filas = this.cambios();
-    if (!this.desde()) return this.notificaciones.aviso('Elige la fecha en que empiezan los turnos.');
-    if (!filas.length) return this.notificaciones.aviso('No moviste a nadie de turno.');
+  /** Cambia el turno desde hoy; los cambios que estaban programados para después se quitan */
+  protected async cambiarTurno(u: Perfil, turno: TurnoCodigo): Promise<void> {
     this.guardando.set(true);
     try {
-      await this.op.programarTurnos(filas, this.desde());
-      this.movidos.set({});
-      this.notificaciones.exito(`${filas.length === 1 ? 'Turno guardado' : `${filas.length} turnos guardados`} desde el ${fechaLarga(this.desde())}.`);
-      await this.cargar();
+      const futuros = this.turnosProgramados().filter((t) => t.perfil_id === u.id && t.desde > this.hoy).map((t) => t.id);
+      await this.op.eliminarTurnosProgramados(futuros);
+      await this.op.programarTurnos([{ perfil_id: u.id, turno }], this.hoy);
+      this.notificaciones.exito(`${u.nombre_completo}: turno ${NOMBRE_TURNO[turno]}.`);
     } catch (e) {
-      this.notificaciones.error(e, 'No se programó el turno');
+      this.notificaciones.error(e, 'No se cambió el turno');
     } finally {
       this.guardando.set(false);
-    }
-  }
-
-  /** Borra toda la asignación de una fecha (por si se guardó mal) */
-  protected async eliminarAsignacion(desde: string, turnos: TurnoProgramado[]): Promise<void> {
-    if (!(await this.confirmacion.pedir({ titulo: '¿Eliminar toda la asignación de turnos?', mensaje: `Se borra la asignación desde el ${fechaLarga(desde)} (${turnos.length} persona(s)).`,
-      consecuencias: ['Cada uno vuelve al turno que tenía antes de esa fecha.'], aceptar: 'Sí, eliminar la asignación' }))) return;
-    await this.borrarTurnos(turnos.map((t) => t.id), 'Asignación eliminada.');
-  }
-
-  /** Quita solo a una persona de una asignación */
-  protected async eliminarTurno(t: TurnoProgramado): Promise<void> {
-    if (!(await this.confirmacion.pedir({ titulo: '¿Quitar este turno?', mensaje: `Se quita a ${t.perfil?.nombre_completo || 'esta persona'} de la asignación del ${fechaLarga(t.desde)}.`,
-      consecuencias: ['Vuelve al turno que tenía antes de esa fecha.'], aceptar: 'Sí, quitar' }))) return;
-    await this.borrarTurnos([t.id], 'Turno quitado.');
-  }
-
-  private async borrarTurnos(ids: number[], mensaje: string): Promise<void> {
-    this.guardando.set(true);
-    try {
-      await this.op.eliminarTurnosProgramados(ids);
-      this.notificaciones.exito(mensaje);
       await this.cargar();
-    } catch (e) {
-      this.notificaciones.error(e, 'No se eliminó');
-    } finally {
-      this.guardando.set(false);
     }
-  }
-
-  protected async alternarSabado(u: Perfil): Promise<void> {
-    try {
-      await this.op.asignarTurno(u.id, (u.turno_habitual ?? null) as TurnoCodigo | null, !u.sabado_rotativo);
-      await this.cargar();
-    } catch (e) {
-      this.notificaciones.error(e);
-    }
-  }
-
-  protected alternarTurnoSabado(turno: TurnoCodigo): void {
-    this.genTurnos.update((l) => (l.includes(turno) ? l.filter((t) => t !== turno) : [...l, turno]));
-  }
-
-  /** Guarda el reparto propuesto de los sábados */
-  protected async generarSabados(): Promise<void> {
-    const filas = this.filasPropuesta();
-    if (!filas.length) return this.notificaciones.aviso('No hay sábados para repartir.');
-    this.guardando.set(true);
-    try {
-      await this.op.guardarRotacion(filas);
-      this.notificaciones.exito(`${this.sabadosPropuestos()} sábado(s) repartidos.`);
-      await this.cargar();
-    } catch (e) {
-      this.notificaciones.error(e, 'No se guardaron los sábados');
-    } finally {
-      this.guardando.set(false);
-    }
-  }
-
-  protected alternarAuxiliarSabado(id: string): void {
-    const l = this.nueva.auxiliares;
-    this.nueva.auxiliares = l.includes(id) ? l.filter((x) => x !== id) : [...l, id];
   }
 
   protected async agregarRotacion(): Promise<void> {
-    const { fecha, auxiliares, turno } = this.nueva;
+    const { fecha, auxiliarId, turno } = this.nueva;
     if (!fecha) return this.notificaciones.aviso('Elige la fecha del sábado.');
-    if (new Date(fecha + 'T00:00:00').getDay() !== 6) return this.notificaciones.aviso('La fecha elegida no es un sábado.');
+    if (diaIso(fecha) !== 6) return this.notificaciones.aviso('La fecha elegida no es un sábado.');
+    if (!auxiliarId) return this.notificaciones.aviso('Elige el auxiliar.');
     if (!turno) return this.notificaciones.aviso('Elige el turno del sábado.');
-    if (!auxiliares.length) return this.notificaciones.aviso('Elige al menos un auxiliar.');
     this.guardando.set(true);
     try {
-      const nota = this.nueva.nota.trim() || null;
-      await this.op.guardarRotacion(auxiliares.map((auxiliar_id) => ({ fecha, auxiliar_id, turno, nota })));
-      this.nueva = { fecha, auxiliares: [], turno: null, nota: '' };
-      this.notificaciones.exito(auxiliares.length === 1 ? 'Auxiliar agregado al sábado.' : `${auxiliares.length} auxiliares agregados al sábado.`);
+      await this.op.guardarRotacion([{ fecha, auxiliar_id: auxiliarId, turno, nota: null }]);
+      // Se queda el sábado elegido para agregar al siguiente auxiliar
+      this.nueva = { fecha, auxiliarId: null, turno: null };
+      this.notificaciones.exito('Auxiliar agregado al sábado.');
       await this.cargar();
     } catch (e) {
       this.notificaciones.error(e, 'No se guardó');

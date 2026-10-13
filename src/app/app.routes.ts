@@ -34,6 +34,7 @@ export const routes: Routes = [
       { path: 'atenciones', title: 'Atenciones', canActivate: [exigirOperacion], loadComponent: () => import('./paginas/operacion/atenciones.component').then((m) => m.AtencionesComponent) },
       { path: 'objetos-perdidos', title: 'Objetos perdidos', canActivate: [exigirOperacion], loadComponent: () => import('./paginas/operacion/objetos-perdidos.component').then((m) => m.ObjetosPerdidosComponent) },
       { path: 'desempeno', title: 'Desempeño', canActivate: [exigirGestionAuxiliares], loadComponent: () => import('./paginas/operacion/desempeno.component').then((m) => m.DesempenoComponent) },
+      { path: 'competencia', title: 'Competencia', canActivate: [exigirGestionAuxiliares], loadComponent: () => import('./paginas/operacion/competencia.component').then((m) => m.CompetenciaComponent) },
       { path: 'auxiliares', title: 'Auxiliares', canActivate: [exigirGestionAuxiliares], loadComponent: () => import('./paginas/operacion/auxiliares.component').then((m) => m.AuxiliaresComponent) },
       { path: 'laboratorios', title: 'Laboratorios', loadComponent: () => import('./paginas/laboratorios/laboratorios.component').then((m) => m.LaboratoriosComponent) },
       { path: 'registros', title: 'Registros', loadComponent: () => import('./paginas/registros/registros.component').then((m) => m.RegistrosComponent) },
