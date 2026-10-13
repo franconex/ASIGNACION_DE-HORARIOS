@@ -159,16 +159,26 @@ interface FormEntrega { objeto: ObjetoPerdido; entregadoA: string; documento: st
           </div>
           <div>
             <label class="etiqueta">Foto del objeto *</label>
-            <label class="flex cursor-pointer items-center gap-3 rounded-lg border-2 border-dashed border-slate-300 p-3 hover:border-marca-400">
+            <div class="flex items-center gap-3 rounded-lg border-2 border-dashed border-slate-300 p-3">
               @if (f.vista) {
-                <img [src]="f.vista" alt="Vista previa" class="h-20 w-20 rounded-md object-cover">
-                <span class="text-sm text-slate-600">Toca para cambiar la foto</span>
+                <img [src]="f.vista" alt="Vista previa" class="h-20 w-20 shrink-0 rounded-md object-cover">
               } @else {
-                <span class="flex h-20 w-20 items-center justify-center rounded-md bg-slate-100 text-slate-400"><app-icono nombre="camara" [tamano]="26" /></span>
-                <span class="text-sm text-slate-600">Tomar o elegir foto</span>
+                <span class="flex h-20 w-20 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400"><app-icono nombre="camara" [tamano]="26" /></span>
               }
-              <input type="file" accept="image/*" capture="environment" class="sr-only" (change)="elegirFoto($event, 'registro')">
-            </label>
+              <div class="min-w-0 flex-1">
+                <p class="mb-2 text-sm text-slate-600">{{ f.vista ? 'Elige otra si quieres cambiarla' : 'Saca una foto o elígela de la galería' }}</p>
+                <div class="flex flex-wrap gap-2">
+                  <label class="btn-secundario btn-sm cursor-pointer">
+                    <app-icono nombre="camara" [tamano]="15" /> Tomar foto
+                    <input type="file" accept="image/*" capture="environment" class="sr-only" (change)="elegirFoto($event, 'registro')">
+                  </label>
+                  <label class="btn-secundario btn-sm cursor-pointer">
+                    <app-icono nombre="galeria" [tamano]="15" /> Galería
+                    <input type="file" accept="image/*" class="sr-only" (change)="elegirFoto($event, 'registro')">
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
         </form>
       }
@@ -198,16 +208,26 @@ interface FormEntrega { objeto: ObjetoPerdido; entregadoA: string; documento: st
           </div>
           <div>
             <label class="etiqueta">Foto de la entrega *</label>
-            <label class="flex cursor-pointer items-center gap-3 rounded-lg border-2 border-dashed border-slate-300 p-3 hover:border-marca-400">
+            <div class="flex items-center gap-3 rounded-lg border-2 border-dashed border-slate-300 p-3">
               @if (f.vista) {
-                <img [src]="f.vista" alt="Vista previa" class="h-20 w-20 rounded-md object-cover">
-                <span class="text-sm text-slate-600">Toca para cambiar la foto</span>
+                <img [src]="f.vista" alt="Vista previa" class="h-20 w-20 shrink-0 rounded-md object-cover">
               } @else {
-                <span class="flex h-20 w-20 items-center justify-center rounded-md bg-slate-100 text-slate-400"><app-icono nombre="camara" [tamano]="26" /></span>
-                <span class="text-sm text-slate-600">Foto de la persona recibiendo el objeto</span>
+                <span class="flex h-20 w-20 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-400"><app-icono nombre="camara" [tamano]="26" /></span>
               }
-              <input type="file" accept="image/*" capture="environment" class="sr-only" (change)="elegirFoto($event, 'entrega')">
-            </label>
+              <div class="min-w-0 flex-1">
+                <p class="mb-2 text-sm text-slate-600">{{ f.vista ? 'Elige otra si quieres cambiarla' : 'Foto de la persona recibiendo el objeto' }}</p>
+                <div class="flex flex-wrap gap-2">
+                  <label class="btn-secundario btn-sm cursor-pointer">
+                    <app-icono nombre="camara" [tamano]="15" /> Tomar foto
+                    <input type="file" accept="image/*" capture="environment" class="sr-only" (change)="elegirFoto($event, 'entrega')">
+                  </label>
+                  <label class="btn-secundario btn-sm cursor-pointer">
+                    <app-icono nombre="galeria" [tamano]="15" /> Galería
+                    <input type="file" accept="image/*" class="sr-only" (change)="elegirFoto($event, 'entrega')">
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
           <p class="text-xs text-slate-500">La fecha, la hora y quién entrega se guardan solos.</p>
         </form>

@@ -415,6 +415,18 @@ export class OperacionService {
     return (data as Perfil[]) ?? [];
   }
 
+  /** Cuentas que entraron con Google y esperan acceso (rol invitado) */
+  async listarInvitados(): Promise<Perfil[]> {
+    const { data, error } = await this.cliente.from('perfiles').select('*').eq('rol', 'invitado').order('creado_en', { ascending: false });
+    if (error) throw new ErrorSistema(error);
+    return (data as Perfil[]) ?? [];
+  }
+
+  /** Habilita una cuenta en espera como auxiliar (admin o encargado), vía función segura */
+  async habilitarUsuario(usuarioId: string): Promise<void> {
+    await this.supabase.rpc('fn_habilitar_usuario', { p_usuario: usuarioId });
+  }
+
   /** Personal de operación activo (auxiliares y encargados), para elegir colaboradores */
   async listarPersonalOperacion(): Promise<Perfil[]> {
     const { data, error } = await this.cliente.from('perfiles').select('*')

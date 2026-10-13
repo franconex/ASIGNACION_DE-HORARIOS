@@ -1,6 +1,6 @@
 import { Component, effect, ElementRef, inject, input } from '@angular/core';
 import {
-  ArrowLeftRight, Ban, Camera, ChartColumn, Handshake, Package, Trophy, BookOpen, Building2, CalendarCheck, CalendarDays, CalendarPlus, CalendarRange, Check,
+  ArrowLeftRight, Ban, Camera, Image, ChartColumn, Handshake, Package, Trophy, BookOpen, Building2, CalendarCheck, CalendarDays, CalendarPlus, CalendarRange, Check,
   ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleCheck, Copy, ClipboardList, Clock, Cpu, Download, Eye, GraduationCap, Info,
   KeyRound, LayoutGrid, Layers, List, Lock, LogOut, MapPin, Menu, Monitor, Palette, Pencil, Plus, Repeat,
   RotateCcw, School, Search, Settings, Shuffle, Star, Sun, Moon, Table2, TriangleAlert, Trash2, User, Users, Wrench, X,
@@ -26,7 +26,7 @@ const ICONOS: Record<string, NodoIcono> = {
   clave: KeyRound as NodoIcono, color: Palette as NodoIcono, grilla: Table2 as NodoIcono, lista: List as NodoIcono,
   grafico: ChartColumn as NodoIcono, trofeo: Trophy as NodoIcono,
   ver: Eye as NodoIcono, candado: Lock as NodoIcono, sol: Sun as NodoIcono, luna: Moon as NodoIcono,
-  objeto: Package as NodoIcono, camara: Camera as NodoIcono, entregar: Handshake as NodoIcono,
+  objeto: Package as NodoIcono, camara: Camera as NodoIcono, galeria: Image as NodoIcono, entregar: Handshake as NodoIcono,
   arriba: ChevronUp as NodoIcono, abajo: ChevronDown as NodoIcono, copiar: Copy as NodoIcono,
 };
 

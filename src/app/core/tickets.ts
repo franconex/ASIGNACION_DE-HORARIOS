@@ -5,7 +5,7 @@ import { TipoAtencion } from './modelos';
  *  1. Atención a docente
  *  2. Técnico: programas, mantenimiento preventivo y correctivo
  *  3. Atención personal (académica)
- *  4. Abrir / cerrar laboratorio (con todas sus PCs)
+ *  4. Abrir / cerrar laboratorio (un ticket por laboratorio)
  * (+ "cambio de estado de PC", que lo registra el sistema).
  */
 export type CategoriaTicket = 'docente' | 'tecnico' | 'personal' | 'laboratorio' | 'sistema';
@@ -14,7 +14,7 @@ export const CATEGORIAS_TICKET: { valor: Exclude<CategoriaTicket, 'sistema'>; te
   { valor: 'docente', texto: 'Atención a docente', ayuda: 'Lo que pidió un docente en el laboratorio', icono: 'usuarios' },
   { valor: 'tecnico', texto: 'Técnico', ayuda: 'Programas y mantenimiento de las PCs', icono: 'equipo' },
   { valor: 'personal', texto: 'Atención personal', ayuda: 'Atención académica a una persona', icono: 'docente' },
-  { valor: 'laboratorio', texto: 'Abrir / cerrar lab', ayuda: 'Apertura o cierre con todas sus PCs', icono: 'candado' },
+  { valor: 'laboratorio', texto: 'Abrir / cerrar lab', ayuda: 'Un ticket por laboratorio', icono: 'candado' },
 ];
 
 export const TIPOS_TICKET: Record<TipoAtencion, { texto: string; corto: string; categoria: CategoriaTicket }> = {
@@ -30,7 +30,7 @@ export const TIPOS_TICKET: Record<TipoAtencion, { texto: string; corto: string; 
 
 /** Abrir o cerrar el laboratorio */
 export const SUBTIPOS_LABORATORIO: { valor: TipoAtencion; texto: string; ayuda: string }[] = [
-  { valor: 'apertura_lab', texto: 'Abrir lab', ayuda: 'Se encendieron / revisaron las PCs' },
+  { valor: 'apertura_lab', texto: 'Abrir lab', ayuda: 'Se abrió y se dejó listo el laboratorio' },
   { valor: 'cierre_lab', texto: 'Cerrar lab', ayuda: 'Se apagaron las PCs y se cerró el lab' },
 ];
 

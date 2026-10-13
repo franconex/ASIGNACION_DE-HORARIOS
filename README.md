@@ -99,6 +99,7 @@ En **Laboratorios**, al tocar un laboratorio se abre su **croquis** dibujado com
   | 35 | `35_completar_cuenta.sql` | **Completar la cuenta al recibir un rol**: quien entró con Google, la primera vez que tiene rol confirma su nombre y crea una contraseña (pantalla `/completar-cuenta`), para entrar también con correo y contraseña (`perfiles.cuenta_completa`, `rpc_completar_cuenta`) |
   | 41 | `41_ticket_fuera_de_turno.sql` | **Ticket fuera de turno**: cada ticket guarda si el auxiliar lo registró fuera de su turno del día (sábado incluido, hora de La Paz) en `atenciones.fuera_de_turno`; lo calcula un trigger al crear (no se puede editar) y se recalculó para los tickets ya registrados. Admin y encargado nunca salen fuera de turno |
   | 42 | `42_cedidos_por_reubicacion.sql` | **Cesiones y reubicaciones en una sola lista**: `fn_cedidos_por_reubicacion(p_desde)` devuelve cada día en que una clase dejó su laboratorio (a qué laboratorio/aula se fue) y quién lo ocupa en su lugar; la lista de Cesiones la muestra junto a las cesiones como "ambiente cedido" |
+  | 43 | `43_encargado_habilita_usuarios.sql` | **El encargado habilita cuentas**: `fn_habilitar_usuario(p_usuario)` pasa una cuenta en espera (invitado) a auxiliar activo; la usan el admin y el encargado de auxiliares (desde Auxiliares). El encargado no puede cambiar roles, desactivar ni editar otros perfiles |
 
 3. **Primer administrador**
    - **Authentication → Users → Add user**: correo y contraseña, con *Auto Confirm User* marcado.
