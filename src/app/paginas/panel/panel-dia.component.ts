@@ -234,7 +234,7 @@ interface Tramo {
     <app-ocupacion-detalle [ocupacion]="seleccionada()" (cerrar)="seleccionada.set(null)" (cambio)="cargar()" />
 
     <!-- ¿Qué registrar en el tramo elegido? -->
-    <app-modal [abierto]="!!porRegistrar()" titulo="Registrar en este horario" ancho="sm" (cerrar)="cerrarRegistrar()">
+    <app-modal [abierto]="!!porRegistrar()" titulo="Registrar en este horario" ancho="sm" [cerrarConFondo]="true" (cerrar)="cerrarRegistrar()">
       @if (porRegistrar(); as s) {
         <p class="mb-4 text-slate-700">
           <b>{{ catalogos.codigoAmbiente(s.ambienteId) }}</b>, <span class="capitalize">{{ fechaLarga(fecha()) }}</span>,

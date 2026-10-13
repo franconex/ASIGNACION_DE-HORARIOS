@@ -38,7 +38,7 @@ import { IconoComponent } from './icono.component';
         <app-icono nombre="buscar" [tamano]="15" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
         <input class="campo !pl-9" [ngModel]="texto()" (ngModelChange)="texto.set($event)" maxlength="80"
                [placeholder]="tipo() === 'iso' ? 'Buscar sistema operativo / ISO (ej: Windows 11, Ubuntu)' : 'Buscar programa (ej: Python, SPSS)'"
-               aria-label="Buscar software">
+               aria-label="Buscar software" (keydown.enter)="$event.preventDefault(); elegirPrimero()">
       </div>
 
       @if (resultados().length) {
@@ -106,6 +106,12 @@ export class SelectorSoftwareComponent implements OnInit {
   protected agregar(id: number): void {
     this.seleccionChange.emit([...this.seleccion(), id]);
     this.texto.set('');
+  }
+
+  /** Enter elige el primer resultado (y no envía el formulario del ticket) */
+  protected elegirPrimero(): void {
+    const primero = this.resultados()[0];
+    if (primero) this.agregar(primero.id);
   }
 
   protected quitar(id: number): void {

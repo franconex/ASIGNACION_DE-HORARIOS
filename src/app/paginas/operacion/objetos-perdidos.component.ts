@@ -239,7 +239,7 @@ interface FormEntrega { objeto: ObjetoPerdido; entregadoA: string; documento: st
     </app-modal>
 
     <!-- FOTO GRANDE -->
-    <app-modal [abierto]="!!fotoGrande()" [titulo]="fotoGrande()?.titulo ?? ''" ancho="lg" (cerrar)="fotoGrande.set(null)">
+    <app-modal [abierto]="!!fotoGrande()" [titulo]="fotoGrande()?.titulo ?? ''" ancho="lg" [cerrarConFondo]="true" (cerrar)="fotoGrande.set(null)">
       @if (fotoGrande(); as f) {
         <img [src]="f.url" [alt]="f.titulo" class="mx-auto max-h-[70vh] rounded-lg object-contain">
       }

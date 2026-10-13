@@ -19,10 +19,11 @@ export interface OpcionBuscador {
   imports: [IconoComponent],
   template: `
     <div class="relative">
-      <input maxlength="80" class="campo pr-8" [placeholder]="placeholder()" [disabled]="deshabilitado()"
+      <!-- Al escribir se busca; lo elegido sigue a la vista (como sugerencia) y no se pierde al salir -->
+      <input maxlength="80" class="campo pr-8" [placeholder]="abierto() && textoSeleccionado() ? textoSeleccionado() : placeholder()" [disabled]="deshabilitado()"
              [value]="abierto() ? texto() : textoSeleccionado()"
-             (focus)="abrir()" (input)="texto.set($any($event.target).value); abierto.set(true); resaltado.set(0)"
-             (keydown)="teclado($event)">
+             (focus)="abrir()" (blur)="abierto.set(false)" (input)="texto.set($any($event.target).value); abierto.set(true); resaltado.set(0)"
+             (keydown)="teclado($event)" role="combobox" [attr.aria-expanded]="abierto()">
       @if (valor() && !deshabilitado()) {
         <button type="button" class="absolute top-1/2 right-2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
                 (click)="seleccionar(null)" aria-label="Quitar"><app-icono nombre="cerrar" [tamano]="15" /></button>
@@ -118,7 +119,12 @@ export class BuscadorComponent {
       evento.preventDefault();
       const opcion = this.filtradas()[this.resaltado()];
       if (opcion) this.seleccionar(opcion.id);
-    } else if (evento.key === 'Escape') this.abierto.set(false);
+    } else if (evento.key === 'Escape' && this.abierto()) {
+      // Solo cierra la lista: no debe cerrar el modal ni el panel de atrás
+      evento.stopPropagation();
+      evento.preventDefault();
+      this.abierto.set(false);
+    }
   }
 
   /** Cierra la lista al hacer clic fuera */

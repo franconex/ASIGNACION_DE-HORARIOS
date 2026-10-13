@@ -10,7 +10,7 @@ import { IconoComponent } from './icono.component';
 @Component({
   selector: 'app-confirmacion',
   imports: [IconoComponent],
-  host: { '(document:keydown.escape)': 'cancelar()' },
+  host: { '(document:keydown.escape)': 'alEscape($event)' },
   template: `
     @if (servicio.actual(); as c) {
       <div class="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]" (mousedown)="cancelar()">
@@ -60,5 +60,12 @@ export class ConfirmacionComponent {
 
   protected cancelar(): void {
     if (this.servicio.actual()) this.servicio.responderCon(false);
+  }
+
+  /** Escape cancela y marca la tecla como usada (el panel de atrás no la vuelve a tomar) */
+  protected alEscape(evento: Event): void {
+    if (!this.servicio.actual()) return;
+    evento.preventDefault();
+    this.cancelar();
   }
 }

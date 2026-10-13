@@ -1,4 +1,5 @@
 import { Component, computed, HostListener, inject } from '@angular/core';
+import { ConfirmacionService } from '../core/confirmacion.service';
 import { PanelesService } from '../core/paneles.service';
 import { AsignacionFormComponent } from '../paginas/asignaciones/asignacion-form.component';
 import { CesionFormComponent } from '../paginas/cesiones/cesion-form.component';
@@ -14,7 +15,7 @@ import { ReservaFormComponent } from '../paginas/reservas/reserva-form.component
   imports: [AsignacionFormComponent, CesionFormComponent, ReservaFormComponent, LaboratorioDetalleComponent],
   template: `
     @if (paneles.actual(); as p) {
-      <div class="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]" (click)="paneles.cerrar()"></div>
+      <div class="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]" (click)="cerrarDesdeFuera()"></div>
       <aside class="panel-entrada fixed inset-y-0 right-0 z-40 flex w-full flex-col bg-superficie shadow-2xl" [class]="ancho()">
         @if (paneles.pila().length > 1) {
           <button class="absolute top-0 left-0 z-10 -translate-x-full rounded-l-lg bg-superficie px-2 py-1 text-xs text-slate-600 shadow"
@@ -50,13 +51,28 @@ import { ReservaFormComponent } from '../paginas/reservas/reserva-form.component
 })
 export class PanelLateralComponent {
   protected readonly paneles = inject(PanelesService);
+  private readonly confirmacion = inject(ConfirmacionService);
 
   /** Ancho según el tipo de panel */
   protected readonly ancho = computed(() => (this.paneles.actual()?.tipo === 'cesion' ? 'max-w-4xl' : 'max-w-5xl'));
 
-  /** Escape cierra el panel de arriba (si no hay un modal abierto encima) */
-  @HostListener('document:keydown.escape')
-  protected alPresionarEscape(): void {
-    if (this.paneles.actual() && !document.querySelector('app-modal .fixed')) this.paneles.cerrar();
+  /** Escape cierra el panel de arriba (si no hay un modal ni una confirmación encima) */
+  @HostListener('document:keydown.escape', ['$event'])
+  protected alPresionarEscape(evento: Event): void {
+    if (evento.defaultPrevented || !this.paneles.actual() || document.querySelector('app-modal .fixed') || this.confirmacion.actual()) return;
+    void this.cerrarDesdeFuera();
+  }
+
+  /**
+   * Clic fuera o Escape: el detalle del laboratorio se cierra; un formulario
+   * (asignar, evento, cesión) pregunta antes, para no perder lo escrito.
+   */
+  protected async cerrarDesdeFuera(): Promise<void> {
+    if (this.paneles.actual()?.tipo !== 'laboratorio') {
+      const salir = await this.confirmacion.pedir({ titulo: '¿Cerrar sin guardar?', mensaje: 'Se perderá lo que llenaste en este formulario.',
+        aceptar: 'Sí, cerrar', peligro: false });
+      if (!salir) return;
+    }
+    this.paneles.cerrar();
   }
 }

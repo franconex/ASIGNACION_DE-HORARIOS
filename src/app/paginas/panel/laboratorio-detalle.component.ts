@@ -177,7 +177,7 @@ import { ErrorSistema, SupabaseService } from '../../core/supabase.service';
     <app-ocupacion-detalle [ocupacion]="seleccionada()" (cerrar)="seleccionada.set(null)" (cambio)="cargar()" />
 
     <!-- ¿Qué registrar en el espacio libre elegido? -->
-    <app-modal [abierto]="!!porRegistrar()" titulo="Registrar en este horario" ancho="sm" (cerrar)="porRegistrar.set(null)">
+    <app-modal [abierto]="!!porRegistrar()" titulo="Registrar en este horario" ancho="sm" [cerrarConFondo]="true" (cerrar)="porRegistrar.set(null)">
       @if (porRegistrar(); as r) {
         <p class="mb-4 text-slate-700">
           <b>{{ catalogos.codigoAmbiente(ambienteId()) }}</b>, <span class="capitalize">{{ fechaLarga(r.fecha) }}</span>,

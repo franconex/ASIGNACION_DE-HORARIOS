@@ -21,7 +21,7 @@ import { ModalComponent } from './modal.component';
   selector: 'app-ocupacion-detalle',
   imports: [ModalComponent, FormsModule, IconoComponent],
   template: `
-    <app-modal [abierto]="!!ocupacion()" [titulo]="tituloModal()" (cerrar)="cerrar.emit()" ancho="md">
+    <app-modal [abierto]="!!ocupacion()" [titulo]="tituloModal()" [cerrarConFondo]="true" (cerrar)="cerrar.emit()" ancho="md">
       @if (ocupacion(); as o) {
         <div class="space-y-4">
           <!-- Encabezado -->
