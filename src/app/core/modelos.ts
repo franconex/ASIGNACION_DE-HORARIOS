@@ -542,3 +542,20 @@ export interface IgnorarChoque {
   asignacion_horario_ids?: number[];
   asignacion_horario_id?: number | null;
 }
+
+/** Software: programa instalable o sistema operativo / ISO */
+export type TipoSoftware = 'programa' | 'iso';
+export type LicenciaSoftware = 'gratuita' | 'educativa' | 'suscripcion' | 'comercial' | 'sin_licencia' | 'por_verificar';
+export interface Software {
+  id: number;
+  nombre: string;
+  tipo: TipoSoftware;
+  categoria: string | null;
+  version: string | null;
+  licencia: LicenciaSoftware;
+  /** Carreras o materias que lo usan */
+  uso: string | null;
+  notas: string | null;
+  activo: boolean;
+}
+

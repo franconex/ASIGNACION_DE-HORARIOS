@@ -5,6 +5,7 @@ import { BuscadorComponent, normalizar, OpcionBuscador } from '../../compartido/
 import { FichasReparacionComponent } from '../../compartido/fichas-reparacion.component';
 import { IconoComponent } from '../../compartido/icono.component';
 import { ModalComponent } from '../../compartido/modal.component';
+import { SelectorSoftwareComponent } from '../../compartido/selector-software.component';
 import { AuthService } from '../../core/auth.service';
 import { CatalogosService } from '../../core/catalogos.service';
 import { descargarCsv } from '../../core/exportar';
@@ -12,6 +13,7 @@ import { AmbientePc, Atencion, EstadoAtencion, NOMBRE_ROL, Perfil, SolicitudBaja
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { ConfirmacionService } from '../../core/confirmacion.service';
 import { FiltroOperacion, OperacionService } from '../../core/operacion.service';
+import { SoftwareService } from '../../core/software.service';
 import {
   ACCIONES_PROGRAMA, CATEGORIAS_TICKET, CategoriaTicket, CHECKLIST_PREVENTIVO, COLOR_CATEGORIA, DetallesTicket,
   PEDIDOS_DOCENTE, RESULTADOS_CORRECTIVO, SUBTIPOS_LABORATORIO, SUBTIPOS_TECNICO, textoDe, TIPOS_PERSONA, TIPOS_TICKET,
@@ -67,7 +69,7 @@ interface FormTicket extends Partial<Atencion> {
  */
 @Component({
   selector: 'app-atenciones-lista',
-  imports: [FormsModule, IconoComponent, ModalComponent, DatePipe, LaboratorioCroquisComponent, BuscadorComponent, FichasReparacionComponent],
+  imports: [FormsModule, IconoComponent, ModalComponent, DatePipe, LaboratorioCroquisComponent, BuscadorComponent, FichasReparacionComponent, SelectorSoftwareComponent],
   template: `
     <!-- SOLICITUDES DE BAJA -->
     @if (solicitudes().length) {
@@ -156,6 +158,9 @@ interface FormTicket extends Partial<Atencion> {
                   <p class="mt-0.5 text-sm"><span class="text-slate-500">Docente:</span> {{ solicitante(g.primero) || '—' }}
                     @if (det(g.primero).pedido) { <span class="chip ml-1 bg-sky-50 text-sky-700">{{ textoDe(pedidos, det(g.primero).pedido) }}</span> }</p>
                   <p class="text-sm"><span class="text-slate-500">Pidió:</span> {{ g.primero.descripcion }}</p>
+                  @if (det(g.primero).pedido === 'instalar_programa' && det(g.primero).programas) {
+                    <p class="text-sm"><span class="text-slate-500">Programa:</span> {{ det(g.primero).programas }}</p>
+                  }
                 }
                 @case ('programas') {
                   <p class="mt-0.5 text-sm font-medium">{{ g.primero.descripcion }}</p>
@@ -360,6 +365,13 @@ interface FormTicket extends Partial<Atencion> {
                       }
                     </div>
                   </div>
+                  @if (f.det.pedido === 'instalar_programa') {
+                    <div class="sm:col-span-2">
+                      <label class="etiqueta">¿Qué programa o ISO pidió? *</label>
+                      <app-selector-software [seleccion]="f.det.software_ids ?? []" (seleccionChange)="f.det.software_ids = $event" />
+                      <p class="mt-1 text-xs text-slate-500">Esto registra el <b>pedido</b>. Si no se instala ahora, déjalo como tarea en el cierre de turno; quien lo instale registra un ticket de <b>Programas</b>.</p>
+                    </div>
+                  }
                   <div>
                     <label class="etiqueta">Detalle del pedido *</label>
                     <textarea class="campo" rows="2" maxlength="500" [(ngModel)]="f.descripcion" name="descripcion" placeholder="Ej: necesita el proyector conectado a su laptop"></textarea>
@@ -382,9 +394,15 @@ interface FormTicket extends Partial<Atencion> {
                       }
                     </div>
                   </div>
-                  <div>
-                    <label class="etiqueta">Programa(s) y versión *</label>
-                    <input class="campo" maxlength="200" [(ngModel)]="f.det.programas" name="programas" placeholder="Ej: SPSS 29, Docker Desktop 4.30">
+                  <div class="sm:col-span-2">
+                    <label class="etiqueta">Programa(s) o sistema operativo / ISO *</label>
+                    @if (f.id && !f.det.software_ids?.length && f.det.programas) {
+                      <!-- Ticket anterior al catálogo: texto libre -->
+                      <input class="campo" maxlength="200" [(ngModel)]="f.det.programas" name="programas">
+                    } @else {
+                      <app-selector-software [seleccion]="f.det.software_ids ?? []" (seleccionChange)="f.det.software_ids = $event" />
+                      <p class="mt-1 text-xs text-slate-500">Busca en la lista de software; si no está, agrégalo desde aquí.</p>
+                    }
                   </div>
                   <div>
                     <label class="etiqueta">¿Lo pidió un docente? <span class="font-normal text-slate-400">(opcional)</span></label>
@@ -574,6 +592,7 @@ export class AtencionesListaComponent implements OnInit {
   protected readonly auth = inject(AuthService);
   protected readonly catalogos = inject(CatalogosService);
   private readonly operacion = inject(OperacionService);
+  private readonly software = inject(SoftwareService);
   private readonly notificaciones = inject(NotificacionesService);
   private readonly confirmacion = inject(ConfirmacionService);
 
@@ -832,10 +851,11 @@ export class AtencionesListaComponent implements OnInit {
       case 'docente':
         if (!f.docente_id && !f.solicitante?.trim()) return 'Indica el docente.';
         if (!d.pedido) return 'Elige qué pidió el docente.';
+        if (d.pedido === 'instalar_programa' && !d.software_ids?.length && !f.id) return 'Elige qué programa o ISO pidió el docente.';
         return (f.descripcion?.trim().length ?? 0) < 3 ? 'Escribe el detalle del pedido.' : null;
       case 'programas':
         if (!d.accion) return 'Elige la acción (instalar, actualizar…).';
-        return (d.programas?.trim().length ?? 0) < 2 ? 'Escribe qué programa(s).' : null;
+        return d.software_ids?.length || (d.programas?.trim().length ?? 0) >= 2 ? null : 'Elige el programa o ISO.';
       case 'preventivo':
         return d.checklist?.length ? null : 'Marca al menos una tarea del preventivo.';
       case 'correctivo':
@@ -883,6 +903,16 @@ export class AtencionesListaComponent implements OnInit {
     }
     // Las PCs solo valen con laboratorio y, en atención a docente, si se abrió el croquis
     if (!f.ambiente_id || f.tipo === 'personal' || this.esLabCompleto(f) || (!this.requierePcs(f) && !f.verPcs)) f.pcs = [];
+    // Software del catálogo: solo en programas y cuando el docente pidió instalar; se guardan también los nombres
+    if (f.tipo !== 'programas' && !(f.tipo === 'docente' && f.det.pedido === 'instalar_programa')) {
+      delete f.det.software_ids;
+      if (f.tipo === 'docente') delete f.det.programas;
+    }
+    if (f.det.software_ids?.length) {
+      f.det.programas = f.det.software_ids.map((id) => this.software.mapa().get(id)?.nombre).filter(Boolean).join(', ');
+    } else {
+      delete f.det.software_ids;
+    }
     // Detalles sin espacios sobrantes ni textos vacíos
     const det = Object.fromEntries(Object.entries(f.det)
       .map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])

@@ -11,7 +11,8 @@ import { descargarCsv } from '../../core/exportar';
 import { DIAS_CORTOS, DIAS_SEMANA, fechaCorta, hoyIso, sumarDias } from '../../core/fechas';
 import { OperacionService, textoRetraso } from '../../core/operacion.service';
 import { CATEGORIAS_FALLA, CategoriaTicket, COLOR_CATEGORIA, TIPOS_TICKET } from '../../core/tickets';
-import { CategoriaFalla, EstadoPc, NOMBRE_ROL, Rol, TipoAtencion, TurnoCodigo } from '../../core/modelos';
+import { CategoriaFalla, EstadoPc, LicenciaSoftware, NOMBRE_ROL, Rol, TipoAtencion, TurnoCodigo } from '../../core/modelos';
+import { LICENCIAS } from '../../core/software.service';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { SupabaseService } from '../../core/supabase.service';
 
@@ -76,6 +77,21 @@ interface Detalle {
 }
 
 /** Lo que devuelve fn_dashboard_fallas (fichas de reparación) */
+/** Lo que devuelve fn_dashboard_software */
+interface FilaSoftware {
+  id: number; nombre: string; tipo: 'programa' | 'iso'; licencia: LicenciaSoftware;
+  pedidos: number; instalar: number; actualizar: number; desinstalar: number; labs: string[];
+}
+interface DashSoftware {
+  kpis: {
+    pedidos: number; instalaciones: number; actualizaciones: number; desinstalaciones: number; programas_distintos: number;
+    preventivos: number; pcs_preventivo: number; correctivos: number; reparadas: number;
+  };
+  por_software: FilaSoftware[];
+  por_lab: { codigo: string; color: string; instalar: number; actualizar: number; desinstalar: number; pedidos: number }[];
+  docentes: { nombre: string; pedidos: number }[];
+}
+
 interface Fallas {
   total: number;
   con_ficha: number;
@@ -112,11 +128,12 @@ const ESTADOS_PC: { clave: EstadoPc; texto: string; clase: string }[] = [
 ];
 
 /** Secciones del dashboard (una a la vez, para no mostrar todo junto) */
-type Seccion = 'resumen' | 'tickets' | 'auxiliares' | 'pcs' | 'uso';
+type Seccion = 'resumen' | 'tickets' | 'auxiliares' | 'software' | 'pcs' | 'uso';
 const SECCIONES: { clave: Seccion; texto: string; icono: string }[] = [
   { clave: 'resumen', texto: 'Resumen', icono: 'panel' },
   { clave: 'tickets', texto: 'Tickets', icono: 'registros' },
   { clave: 'auxiliares', texto: 'Auxiliares y turnos', icono: 'usuarios' },
+  { clave: 'software', texto: 'Software y mantenimiento', icono: 'grilla' },
   { clave: 'pcs', texto: 'PCs y fallas', icono: 'equipo' },
   { clave: 'uso', texto: 'Uso de laboratorios', icono: 'laboratorio' },
 ];
@@ -241,7 +258,7 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
             @for (k of resumenExtra(); track k.titulo) {
               <button class="tarjeta p-3 text-left transition hover:border-marca-300" (click)="irA(k.seccion)">
                 <p class="text-xs text-slate-500">{{ k.titulo }}</p>
-                <p class="text-3xl font-bold tabular-nums" [class]="k.alerta ? 'text-amber-700' : ''">{{ k.valor }}</p>
+                <p class="font-bold tabular-nums" [class]="(k.alerta ? 'text-amber-700 ' : '') + (k.chico ? 'truncate text-lg leading-9' : 'text-3xl')" [title]="k.valor">{{ k.valor }}</p>
                 <p class="flex items-center justify-between gap-1 text-xs text-slate-500">{{ k.nota }} <app-icono nombre="siguiente" [tamano]="12" class="text-slate-400" /></p>
               </button>
             }
@@ -716,6 +733,165 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
         }
         }
 
+        @case ('software') {
+          @if (software(); as sw) {
+            <!-- SOFTWARE Y MANTENIMIENTO -->
+            <div class="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <div class="tarjeta p-3">
+                <p class="text-xs text-slate-500">Pedidos de docentes</p>
+                <p class="text-3xl font-bold tabular-nums text-sky-700">{{ sw.kpis.pedidos }}</p>
+                <p class="text-xs text-slate-500">programas que pidieron (Atención a docente)</p>
+              </div>
+              <div class="tarjeta p-3">
+                <p class="text-xs text-slate-500">Instalaciones</p>
+                <p class="text-3xl font-bold tabular-nums">{{ sw.kpis.instalaciones }}</p>
+                <p class="text-xs text-slate-500">{{ sw.kpis.programas_distintos }} programas distintos</p>
+              </div>
+              <div class="tarjeta p-3">
+                <p class="text-xs text-slate-500">Actualizaciones</p>
+                <p class="text-3xl font-bold tabular-nums">{{ sw.kpis.actualizaciones }}</p>
+                <p class="text-xs text-slate-500">{{ sw.kpis.desinstalaciones }} desinstalaciones</p>
+              </div>
+              <div class="tarjeta p-3">
+                <p class="text-xs text-slate-500">Mant. preventivo</p>
+                <p class="text-3xl font-bold tabular-nums text-emerald-700">{{ sw.kpis.preventivos }}</p>
+                <p class="text-xs text-slate-500">trabajos · {{ sw.kpis.pcs_preventivo }} PCs revisadas</p>
+              </div>
+              <div class="tarjeta p-3">
+                <p class="text-xs text-slate-500">Mant. correctivo</p>
+                <p class="text-3xl font-bold tabular-nums text-amber-700">{{ sw.kpis.correctivos }}</p>
+                <p class="text-xs text-slate-500">PCs atendidas · {{ sw.kpis.reparadas }} reparadas</p>
+              </div>
+              <button class="tarjeta p-3 text-left transition hover:border-marca-300" (click)="verSoftwareLabs()">
+                <p class="text-xs text-slate-500">Lista de software</p>
+                <p class="mt-1 text-sm font-semibold text-marca-700">Ver programas e ISOs que se manejan</p>
+                <p class="flex items-center justify-between text-xs text-slate-500">Laboratorios → Software <app-icono nombre="siguiente" [tamano]="12" /></p>
+              </button>
+            </div>
+
+            <div class="mb-5 grid gap-5 lg:grid-cols-2">
+              <section class="tarjeta p-4">
+                <h2 class="font-semibold">Programas más pedidos por docentes</h2>
+                <p class="mb-3 text-xs text-slate-500">Tickets de Atención a docente → Instalar un programa (el pedido; la instalación se cuenta aparte)</p>
+                <div class="space-y-2">
+                  @for (f of masPedidos(); track f.id) {
+                    <div class="grid grid-cols-[10rem_1fr] items-center gap-2">
+                      <span class="min-w-0">
+                        <span class="block truncate text-sm font-medium" [title]="f.nombre">{{ f.nombre }}</span>
+                        <span class="block truncate text-[10px] text-slate-400">{{ f.labs.join(', ') }}</span>
+                      </span>
+                      <span class="flex items-center gap-2">
+                        <span class="h-4 rounded-[4px] bg-sky-500" [style.width.%]="(f.pedidos / topePedidos()) * 85"></span>
+                        <span class="text-sm font-semibold tabular-nums">{{ f.pedidos }}</span>
+                      </span>
+                    </div>
+                  } @empty {
+                    <p class="py-6 text-center text-sm text-slate-500">Ningún docente pidió programas en este periodo.</p>
+                  }
+                </div>
+              </section>
+
+              <section class="tarjeta p-4">
+                <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h2 class="font-semibold">Programas más instalados</h2>
+                    <p class="text-xs text-slate-500">Tickets de Programas: instalaciones y actualizaciones (un trabajo en varias PCs cuenta una vez por laboratorio)</p>
+                  </div>
+                  <div class="flex gap-3 text-xs text-slate-600">
+                    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--serie-1)]"></span> Instaló</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--serie-3)]"></span> Actualizó</span>
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  @for (f of masInstalados(); track f.id) {
+                    <div class="grid grid-cols-[10rem_1fr] items-center gap-2">
+                      <span class="min-w-0">
+                        <span class="block truncate text-sm font-medium" [title]="f.nombre">{{ f.nombre }}</span>
+                        <span class="block truncate text-[10px] text-slate-400">{{ f.labs.join(', ') }}</span>
+                      </span>
+                      <span class="flex items-center gap-2">
+                        <span class="flex h-4 gap-[2px]" [style.width.%]="((f.instalar + f.actualizar) / topeInstalados()) * 85">
+                          @if (f.instalar) { <span class="h-full rounded-l-[4px] bg-[var(--serie-1)]" [class.rounded-r-[4px]]="!f.actualizar" [style.flex-grow]="f.instalar"></span> }
+                          @if (f.actualizar) { <span class="h-full rounded-r-[4px] bg-[var(--serie-3)]" [class.rounded-l-[4px]]="!f.instalar" [style.flex-grow]="f.actualizar"></span> }
+                        </span>
+                        <span class="text-sm font-semibold tabular-nums">{{ f.instalar + f.actualizar }}</span>
+                      </span>
+                    </div>
+                  } @empty {
+                    <p class="py-6 text-center text-sm text-slate-500">No se instaló ni actualizó software en este periodo.</p>
+                  }
+                </div>
+              </section>
+            </div>
+
+            <div class="mb-5 grid gap-5 lg:grid-cols-2">
+              <section class="tarjeta p-4">
+                <h2 class="font-semibold">Software por laboratorio</h2>
+                <p class="mb-3 text-xs text-slate-500">Dónde se trabajó más con el software</p>
+                <table class="tabla">
+                  <thead><tr><th>Lab</th><th class="text-right">Instaló</th><th class="text-right">Actualizó</th><th class="text-right">Desinstaló</th><th class="text-right">Pedidos</th></tr></thead>
+                  <tbody>
+                    @for (l of sw.por_lab; track l.codigo) {
+                      <tr>
+                        <td><span class="inline-flex items-center gap-1.5 font-medium"><span class="h-2.5 w-2.5 rounded-full" [style.background]="l.color"></span>{{ l.codigo }}</span></td>
+                        <td class="text-right tabular-nums">{{ l.instalar || '·' }}</td>
+                        <td class="text-right tabular-nums">{{ l.actualizar || '·' }}</td>
+                        <td class="text-right tabular-nums">{{ l.desinstalar || '·' }}</td>
+                        <td class="text-right tabular-nums">{{ l.pedidos || '·' }}</td>
+                      </tr>
+                    } @empty {
+                      <tr><td colspan="5" class="py-6 text-center text-sm text-slate-500">Sin trabajo con software en este periodo.</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </section>
+              <section class="tarjeta p-4">
+                <h2 class="font-semibold">Docentes que más programas pidieron</h2>
+                <p class="mb-3 text-xs text-slate-500">Pedidos de instalación en el periodo</p>
+                <table class="tabla">
+                  <thead><tr><th>Docente</th><th class="text-right">Pedidos</th></tr></thead>
+                  <tbody>
+                    @for (d of sw.docentes; track d.nombre) {
+                      <tr><td class="font-medium">{{ d.nombre }}</td><td class="text-right tabular-nums">{{ d.pedidos }}</td></tr>
+                    } @empty {
+                      <tr><td colspan="2" class="py-6 text-center text-sm text-slate-500">Sin pedidos de docentes en este periodo.</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </section>
+            </div>
+
+            <section class="mb-5">
+              <div class="mb-2 flex flex-wrap items-end justify-between gap-2">
+                <h2 class="font-semibold">Todo el software trabajado en el periodo</h2>
+                <button class="btn-secundario btn-sm" (click)="exportarSoftware()" [disabled]="!sw.por_software.length"><app-icono nombre="descargar" [tamano]="14" /> Exportar</button>
+              </div>
+              <div class="tarjeta overflow-x-auto">
+                <table class="tabla">
+                  <thead><tr><th>Software</th><th>Licencia</th><th class="text-right">Pedidos docentes</th><th class="text-right">Instaló</th><th class="text-right">Actualizó</th><th class="text-right">Desinstaló</th><th>Laboratorios</th></tr></thead>
+                  <tbody>
+                    @for (f of sw.por_software; track f.id) {
+                      <tr>
+                        <td class="font-medium">{{ f.nombre }}@if (f.tipo === 'iso') { <span class="chip ml-1 bg-violet-100 text-violet-700">ISO</span> }</td>
+                        <td><span class="chip whitespace-nowrap" [class]="licencias[f.licencia].clase">{{ licencias[f.licencia].texto }}</span></td>
+                        <td class="text-right tabular-nums">{{ f.pedidos || '·' }}</td>
+                        <td class="text-right tabular-nums">{{ f.instalar || '·' }}</td>
+                        <td class="text-right tabular-nums">{{ f.actualizar || '·' }}</td>
+                        <td class="text-right tabular-nums">{{ f.desinstalar || '·' }}</td>
+                        <td class="text-xs text-slate-500">{{ f.labs.join(', ') }}</td>
+                      </tr>
+                    } @empty {
+                      <tr><td colspan="7" class="py-6 text-center text-sm text-slate-500">Aún no hay tickets con software del catálogo en este periodo.</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          } @else {
+            <p class="tarjeta py-10 text-center text-sm text-slate-500">Cargando…</p>
+          }
+        }
+
         @case ('uso') {
     @if (uso(); as u) {
 
@@ -1037,6 +1213,14 @@ export class DesempenoComponent implements OnInit {
   protected readonly uso = signal<UsoLabs | null>(null);
   protected readonly detalle = signal<Detalle | null>(null);
   protected readonly fallas = signal<Fallas | null>(null);
+  protected readonly software = signal<DashSoftware | null>(null);
+  protected readonly licencias = LICENCIAS;
+  protected readonly masPedidos = computed(() => (this.software()?.por_software ?? []).filter((f) => f.pedidos)
+    .sort((a, b) => b.pedidos - a.pedidos || a.nombre.localeCompare(b.nombre, 'es')).slice(0, 10));
+  protected readonly masInstalados = computed(() => (this.software()?.por_software ?? []).filter((f) => f.instalar + f.actualizar)
+    .sort((a, b) => b.instalar + b.actualizar - (a.instalar + a.actualizar) || a.nombre.localeCompare(b.nombre, 'es')).slice(0, 10));
+  protected readonly topePedidos = computed(() => Math.max(1, ...this.masPedidos().map((f) => f.pedidos)));
+  protected readonly topeInstalados = computed(() => Math.max(1, ...this.masInstalados().map((f) => f.instalar + f.actualizar)));
   protected readonly categoriasFalla = CATEGORIAS_FALLA;
   /** "Otras" que se agregaron a la lista en esta sesión */
   protected readonly agregadas = signal<Set<string>>(new Set());
@@ -1134,7 +1318,7 @@ export class DesempenoComponent implements OnInit {
     const x = this.detalle();
     const u = this.uso();
     const f = this.fallas();
-    const lista: { titulo: string; valor: string | number; nota: string; seccion: Seccion; alerta?: boolean }[] = [];
+    const lista: { titulo: string; valor: string | number; nota: string; seccion: Seccion; alerta?: boolean; chico?: boolean }[] = [];
     if (x) {
       lista.push({ titulo: 'Cierres a tiempo', valor: `${this.pctATiempo()}%`, nota: `${x.cierres.total} cierres de turno`, seccion: 'auxiliares' });
       lista.push({ titulo: 'Cierres con retraso', valor: x.cierres.con_retraso, nota: x.cierres.retraso_promedio ? `prom. ${this.retraso(x.cierres.retraso_promedio)}` : 'sin retrasos', seccion: 'auxiliares', alerta: x.cierres.con_retraso > 0 });
@@ -1145,6 +1329,14 @@ export class DesempenoComponent implements OnInit {
     }
     if (f) lista.push({ titulo: 'PCs reincidentes', valor: f.reincidentes.length, nota: `${f.total} reparaciones`, seccion: 'pcs', alerta: f.reincidentes.length > 0 });
     if (x) lista.push({ titulo: 'PCs dadas de baja', valor: x.bajas.length, nota: `${x.objetos.en_custodia} objetos en custodia`, seccion: 'pcs', alerta: x.bajas.length > 0 });
+    const sw = this.software();
+    if (sw) {
+      const pedido = this.masPedidos()[0];
+      const instalado = this.masInstalados()[0];
+      lista.push({ titulo: 'Programa más pedido', valor: pedido?.nombre ?? '—', nota: pedido ? `${pedido.pedidos} pedidos de docentes` : 'sin pedidos', seccion: 'software', chico: true });
+      lista.push({ titulo: 'Programa más instalado', valor: instalado?.nombre ?? '—', nota: instalado ? `${instalado.instalar + instalado.actualizar} instalaciones/actualizaciones` : 'sin instalaciones', seccion: 'software', chico: true });
+      lista.push({ titulo: 'Mantenimientos', valor: sw.kpis.preventivos + sw.kpis.correctivos, nota: `${sw.kpis.preventivos} preventivos · ${sw.kpis.correctivos} correctivos`, seccion: 'software' });
+    }
     return lista;
   });
 
@@ -1197,6 +1389,7 @@ export class DesempenoComponent implements OnInit {
     void this.cargarUso(desde, hasta);
     void this.cargarDetalle(desde, hasta);
     void this.cargarFallas(desde, hasta);
+    void this.cargarSoftware(desde, hasta);
     try {
       this.datos.set(await this.supabase.rpc<Dashboard>('fn_dashboard_operacion', { p_desde: desde, p_hasta: hasta }));
     } catch (e) {
@@ -1223,6 +1416,27 @@ export class DesempenoComponent implements OnInit {
       this.detalle.set(null);
       this.notificaciones.error(e, 'No se cargó el análisis detallado');
     }
+  }
+
+  private async cargarSoftware(desde: string, hasta: string): Promise<void> {
+    try {
+      this.software.set(await this.supabase.rpc<DashSoftware>('fn_dashboard_software', { p_desde: desde, p_hasta: hasta }));
+    } catch (e) {
+      this.software.set(null);
+      this.notificaciones.error(e, 'No se cargó el software');
+    }
+  }
+
+  protected verSoftwareLabs(): void {
+    void this.router.navigate(['/laboratorios'], { queryParams: { vista: 'software' } });
+  }
+
+  protected exportarSoftware(): void {
+    const sw = this.software();
+    if (!sw) return;
+    const { desde, hasta } = this.periodo();
+    descargarCsv(`software-${desde}-a-${hasta}.csv`, ['Software', 'Licencia', 'Pedidos de docentes', 'Instaló', 'Actualizó', 'Desinstaló', 'Laboratorios'],
+      sw.por_software.map((f) => [f.nombre, LICENCIAS[f.licencia].texto, f.pedidos, f.instalar, f.actualizar, f.desinstalar, f.labs.join(', ')]));
   }
 
   private async cargarFallas(desde: string, hasta: string): Promise<void> {

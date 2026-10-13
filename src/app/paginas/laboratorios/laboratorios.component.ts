@@ -1,4 +1,5 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
+import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
 import { IconoComponent } from '../../compartido/icono.component';
 import { AuthService } from '../../core/auth.service';
@@ -7,6 +8,7 @@ import { fechaActual } from '../../core/fechas';
 import { Ambiente } from '../../core/modelos';
 import { PanelesService } from '../../core/paneles.service';
 import { AmbientesComponent } from '../catalogos/ambientes.component';
+import { SoftwareComponent } from './software.component';
 
 /** Texto y color de cada estado de laboratorio */
 const ESTADOS: Record<string, { texto: string; clase: string }> = {
@@ -17,17 +19,33 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
 
 /**
  * Apartado de laboratorios: directorio de tarjetas (toca una para ver su
- * horario, sus clases y su inventario de PCs) y, para editores, la tabla de
+ * horario, sus clases y su inventario de PCs), la lista de software que se
+ * maneja (?vista=software) y, para editores, la tabla de
  * gestión (alta, edición, capacidad, color, estado).
  */
 @Component({
   selector: 'app-laboratorios',
-  imports: [IconoComponent, AmbientesComponent],
+  imports: [IconoComponent, AmbientesComponent, SoftwareComponent],
   template: `
     <header class="mb-4">
       <h1 class="text-2xl font-semibold tracking-tight">Laboratorios</h1>
-      <p class="mt-0.5 text-slate-600">Toque un laboratorio para ver el croquis de sus PCs, su horario y sus clases.</p>
+      <p class="mt-0.5 text-slate-600">
+        {{ vista() === 'software' ? 'Lista de programas y sistemas operativos que se manejan en los laboratorios, y lo que se pidió e instaló.' : 'Toque un laboratorio para ver el croquis de sus PCs, su horario y sus clases.' }}
+      </p>
+      <nav class="mt-3 flex gap-1 border-b border-slate-200">
+        @for (t of vistas; track t.valor) {
+          <button class="-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition"
+                  [class]="vista() === t.valor ? 'border-marca-600 text-marca-700' : 'border-transparent text-slate-500 hover:text-slate-700'"
+                  (click)="irA(t.valor)">
+            <app-icono [nombre]="t.icono" [tamano]="15" /> {{ t.texto }}
+          </button>
+        }
+      </nav>
     </header>
+
+    @if (vista() === 'software') {
+      <app-software />
+    } @else {
 
     <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       @for (a of laboratorios(); track a.id) {
@@ -66,12 +84,22 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
         <app-ambientes />
       </section>
     }
+    }
   `,
 })
 export class LaboratoriosComponent {
   protected readonly auth = inject(AuthService);
   protected readonly catalogos = inject(CatalogosService);
   private readonly paneles = inject(PanelesService);
+  private readonly router = inject(Router);
+
+  /** Pestaña abierta, desde la URL (?vista=software) */
+  readonly vistaUrl = input<string>(undefined, { alias: 'vista' });
+  protected readonly vista = computed(() => (this.vistaUrl() === 'software' ? 'software' : 'laboratorios'));
+  protected readonly vistas = [
+    { valor: 'laboratorios', texto: 'Laboratorios', icono: 'laboratorio' },
+    { valor: 'software', texto: 'Software', icono: 'equipo' },
+  ];
 
   protected readonly estados = ESTADOS;
   private readonly hoy = fechaActual(environment.zonaHoraria);
@@ -84,6 +112,10 @@ export class LaboratoriosComponent {
 
   protected pcsOperativas(id: number): number {
     return (this.catalogos.pcsPorAmbiente().get(id) ?? []).filter((pc) => pc.estado === 'operativa').length;
+  }
+
+  protected irA(vista: string): void {
+    void this.router.navigate([], { queryParams: { vista: vista === 'software' ? 'software' : null } });
   }
 
   protected abrir(a: Ambiente): void {

@@ -105,7 +105,9 @@ export const TIPOS_PERSONA = [
 export interface DetallesTicket {
   /** Atención a docente */
   pedido?: string;
-  /** Programas */
+  /** Programas (y atención a docente que pidió instalar): software del catálogo */
+  software_ids?: number[];
+  /** Nombres del software elegido (o texto libre en tickets viejos) */
   programas?: string;
   accion?: string;
   /** Preventivo */
