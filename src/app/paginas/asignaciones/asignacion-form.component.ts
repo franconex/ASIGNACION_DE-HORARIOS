@@ -125,12 +125,13 @@ let contadorFilas = 0;
               <div class="grid gap-3 sm:grid-cols-3">
                 <div>
                   <label class="etiqueta">Fecha de inicio</label>
-                  <input type="date" class="campo" [ngModel]="fechaInicio()" (ngModelChange)="cambiarInicio($event, s)" [min]="id() ? '' : hoy">
+                  <input type="date" class="campo" [ngModel]="fechaInicio()" (ngModelChange)="cambiarInicio($event, s)" [min]="id() ? '' : hoy"
+                         [disabled]="yaEmpezo()" [title]="yaEmpezo() ? 'Ya empezó: el inicio no se cambia' : ''">
                 </div>
                 <div>
                   <label class="etiqueta">Fecha de fin</label>
                   <input type="date" class="campo" [ngModel]="fechaFin()" (ngModelChange)="fechaFin.set($event); programarVerificacion()"
-                         [min]="fechaInicio()" [max]="finMaximo()">
+                         [min]="yaEmpezo() ? hoy : fechaInicio()" [max]="finMaximo()">
                 </div>
                 <div class="flex flex-col justify-end">
                   @if (fechaInicio() && fechaFin()) {
@@ -141,7 +142,7 @@ let contadorFilas = 0;
                 </div>
               </div>
               <p class="mt-1 text-xs" [class]="errorRango() ? 'text-red-700' : 'text-slate-500'">
-                {{ errorRango() || 'Se calcula ' + s.meses_duracion + ' meses automáticamente. Puede extender unos días, sin llegar a ' + s.meses_maximo + ' meses (máximo ' + (finMaximo() ? fechaCorta(finMaximo()) : '—') + ').' }}
+                {{ errorRango() || (yaEmpezo() ? 'Ya empezó: los cambios se aplican desde hoy (' + fechaCorta(hoy) + '). Las clases anteriores quedan como estaban. ' : '') + 'Se calcula ' + s.meses_duracion + ' meses automáticamente. Puede extender unos días, sin llegar a ' + s.meses_maximo + ' meses (máximo ' + (finMaximo() ? fechaCorta(finMaximo()) : '—') + ').' }}
               </p>
             }
           }
@@ -373,6 +374,8 @@ export class AsignacionFormComponent implements OnInit {
   protected readonly sistemaId = signal(0);
   protected readonly fechasMarcadas = signal<string[]>([]);
   protected readonly fechaInicio = signal('');
+  /** Inicio guardado (al editar): si ya pasó, lo dictado no se modifica */
+  private readonly inicioGuardado = signal('');
   protected readonly fechaFin = signal('');
   protected readonly carreraId = signal(0);
   protected readonly docenteId = signal<number | null>(null);
@@ -409,6 +412,10 @@ export class AsignacionFormComponent implements OnInit {
   /** Primer día marcado que todavía no pasó (desde ahí se completa el módulo) */
   protected readonly primerDiaFuturo = computed(() => this.fechasMarcadas().find((f) => f >= this.hoy) ?? null);
 
+  /** Semestral que se está editando y ya empezó: se cambia desde hoy en adelante */
+  protected readonly yaEmpezo = computed(() =>
+    !!this.id() && this.sistema()?.modo_fechas === 'rango' && !!this.inicioGuardado() && this.inicioGuardado() < this.hoy);
+
   /** Último fin permitido en semestral (un día antes de cumplir meses_maximo) */
   protected readonly finMaximo = computed(() => {
     const s = this.sistema();
@@ -418,6 +425,7 @@ export class AsignacionFormComponent implements OnInit {
   protected readonly errorRango = computed(() => {
     if (this.sistema()?.modo_fechas !== 'rango' || !this.fechaInicio() || !this.fechaFin()) return '';
     if (this.fechaFin() < this.fechaInicio()) return 'La fecha de fin debe ser posterior al inicio.';
+    if (this.yaEmpezo() && this.fechaFin() < this.hoy) return 'Esta asignación ya terminó: los días pasados no se modifican.';
     if (this.finMaximo() && this.fechaFin() > this.finMaximo()) return `No puede llegar a ${this.sistema()?.meses_maximo} meses: el fin máximo es ${fechaCorta(this.finMaximo())}.`;
     return '';
   });
@@ -429,7 +437,9 @@ export class AsignacionFormComponent implements OnInit {
     const habil = (f: string) => !this.catalogos.motivoNoLaborable(f);
     if (s.modo_fechas === 'dias') return this.fechasMarcadas().filter(habil);
     if (!this.fechaInicio() || !this.fechaFin() || this.errorRango()) return [];
-    return rangoFechas(this.fechaInicio(), this.fechaFin()).filter((f) => s.dias_permitidos.includes(diaIso(f)) && habil(f));
+    // Ya empezó: solo cuenta desde hoy (lo pasado no se verifica ni se toca)
+    const desde = this.yaEmpezo() ? this.hoy : this.fechaInicio();
+    return rangoFechas(desde, this.fechaFin()).filter((f) => s.dias_permitidos.includes(diaIso(f)) && habil(f));
   });
 
   /** Días de la semana que se pueden elegir en los horarios */
@@ -524,6 +534,7 @@ export class AsignacionFormComponent implements OnInit {
     this.sistemaId.set(a.sistema_id);
     this.fechasMarcadas.set((a.fechas ?? []).map((f) => f.fecha).sort());
     this.fechaInicio.set(a.fecha_inicio);
+    this.inicioGuardado.set(a.fecha_inicio);
     this.fechaFin.set(a.fecha_fin);
     this.carreraId.set(a.carrera_id);
     this.docenteId.set(a.docente_id);
@@ -572,6 +583,10 @@ export class AsignacionFormComponent implements OnInit {
   }
 
   protected cambiarSistema(s: SistemaAcademico): void {
+    if (this.yaEmpezo() && s.id !== this.sistemaId()) {
+      this.notificaciones.aviso('Este semestral ya empezó: no se puede cambiar de sistema. Cree una asignación nueva.');
+      return;
+    }
     const antes = this.diasDisponibles();
     this.sistemaId.set(s.id);
     if (s.modo_fechas === 'dias') {
@@ -889,7 +904,7 @@ export class AsignacionFormComponent implements OnInit {
           reserva_id: o.reservaId, motivo: `Laboratorio ocupado: ${o.motivo}`.slice(0, 300),
         };
       }));
-      await this.ocupacion.guardarAsignacion({
+      const idGuardado = await this.ocupacion.guardarAsignacion({
         id: this.id() ?? null,
         sistema_id: this.sistemaId(),
         // Domingos y feriados no se guardan como días de clase
@@ -900,9 +915,11 @@ export class AsignacionFormComponent implements OnInit {
         grupo: this.usaGrupo() ? this.grupo().trim() : '', observacion: this.observacion().trim(), horarios, reubicaciones,
       });
       await this.vincularDocente();
-      this.notificaciones.exito(reubicaciones.length
+      // Semestral ya empezada: la base cierra la original ayer y crea otra desde hoy
+      const desdeHoy = this.yaEmpezo() && idGuardado !== this.id() ? ` Los cambios rigen desde hoy (${fechaCorta(this.hoy)}); las clases anteriores quedan igual.` : '';
+      this.notificaciones.exito((reubicaciones.length
         ? `Asignación guardada. ${reubicaciones.length} día(s) la clase va a otro laboratorio o aula.`
-        : 'Asignación guardada.');
+        : 'Asignación guardada.') + desdeHoy);
       this.paneles.guardado();
     } catch (e) {
       this.notificaciones.error(e, 'No se guardó');
