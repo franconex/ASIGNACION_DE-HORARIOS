@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, ElementRef, inject, OnInit, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BuscadorComponent, normalizar, OpcionBuscador } from '../../compartido/buscador.component';
+import { DocenteFormComponent, docenteNuevo, FormDocente } from '../../compartido/docente-form.component';
 import { FichasReparacionComponent } from '../../compartido/fichas-reparacion.component';
 import { IconoComponent } from '../../compartido/icono.component';
 import { ModalComponent } from '../../compartido/modal.component';
@@ -69,7 +70,8 @@ interface FormTicket extends Partial<Atencion> {
  */
 @Component({
   selector: 'app-atenciones-lista',
-  imports: [FormsModule, IconoComponent, ModalComponent, DatePipe, LaboratorioCroquisComponent, BuscadorComponent, FichasReparacionComponent, SelectorSoftwareComponent],
+  imports: [FormsModule, IconoComponent, ModalComponent, DatePipe, LaboratorioCroquisComponent, BuscadorComponent, FichasReparacionComponent, SelectorSoftwareComponent,
+    DocenteFormComponent],
   template: `
     <!-- SOLICITUDES DE BAJA -->
     @if (solicitudes().length) {
@@ -348,8 +350,16 @@ interface FormTicket extends Partial<Atencion> {
                   <div>
                     <label class="etiqueta">Docente *</label>
                     @if (!f.otroSolicitante) {
-                      <app-buscador [opciones]="opcionesDocentes()" [valor]="f.docente_id ?? null" (valorChange)="f.docente_id = $event" placeholder="Buscar docente" />
-                      <button type="button" class="mt-1 text-xs text-marca-600 hover:underline" (click)="f.otroSolicitante = true; f.docente_id = null">No está en la lista</button>
+                      <div class="flex items-start gap-1.5">
+                        <div class="min-w-0 flex-1">
+                          <app-buscador [opciones]="opcionesDocentes()" [valor]="f.docente_id ?? null" (valorChange)="f.docente_id = $event" placeholder="Buscar docente"
+                                        [permitirCrear]="true" (crear)="abrirNuevoDocente($event)" />
+                        </div>
+                        <button type="button" class="btn-secundario shrink-0 whitespace-nowrap" (click)="abrirNuevoDocente('')" title="Registrar un docente que no está en la lista">
+                          <app-icono nombre="agregar" [tamano]="15" /> Agregar docente
+                        </button>
+                      </div>
+                      <button type="button" class="mt-1 text-xs text-slate-500 hover:underline" (click)="f.otroSolicitante = true; f.docente_id = null">Solo escribir el nombre (sin registrarlo)</button>
                     } @else {
                       <input class="campo" maxlength="120" [(ngModel)]="f.solicitante" name="solicitante" placeholder="Nombre del docente">
                       <button type="button" class="mt-1 text-xs text-marca-600 hover:underline" (click)="f.otroSolicitante = false; f.solicitante = ''">Buscar en la lista</button>
@@ -406,7 +416,15 @@ interface FormTicket extends Partial<Atencion> {
                   </div>
                   <div>
                     <label class="etiqueta">¿Lo pidió un docente? <span class="font-normal text-slate-400">(opcional)</span></label>
-                    <app-buscador [opciones]="opcionesDocentes()" [valor]="f.docente_id ?? null" (valorChange)="f.docente_id = $event" placeholder="Buscar docente" />
+                    <div class="flex items-start gap-1.5">
+                      <div class="min-w-0 flex-1">
+                        <app-buscador [opciones]="opcionesDocentes()" [valor]="f.docente_id ?? null" (valorChange)="f.docente_id = $event" placeholder="Buscar docente"
+                                      [permitirCrear]="true" (crear)="abrirNuevoDocente($event)" />
+                      </div>
+                      <button type="button" class="btn-secundario shrink-0 whitespace-nowrap" (click)="abrirNuevoDocente('')" title="Registrar un docente que no está en la lista">
+                        <app-icono nombre="agregar" [tamano]="15" /> Agregar docente
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <label class="etiqueta">Observación</label>
@@ -582,6 +600,9 @@ interface FormTicket extends Partial<Atencion> {
         </button>
       </ng-container>
     </app-modal>
+
+    <!-- Alta rápida de docente: el mismo modal de Configuración → Docentes -->
+    <app-docente-form [datos]="nuevoDocente()" (cerrar)="nuevoDocente.set(null)" (guardado)="docenteAgregado($event)" />
   `,
   styles: `
     .paso { display: inline-flex; width: 1.15rem; height: 1.15rem; margin-right: 0.25rem; align-items: center; justify-content: center;
@@ -650,6 +671,22 @@ export class AtencionesListaComponent implements OnInit {
   protected readonly laboratorios = computed(() => this.catalogos.laboratorios());
   protected readonly opcionesDocentes = computed<OpcionBuscador[]>(() =>
     this.catalogos.docentesActivos().map((d) => ({ id: d.id, texto: `${d.apellidos} ${d.nombres}` })));
+
+  /** Alta rápida de docente (si no está en la lista) */
+  protected readonly nuevoDocente = signal<FormDocente | null>(null);
+
+  /** Abre el alta de docente; lo escrito en el buscador se toma como "Nombres Apellidos" */
+  protected abrirNuevoDocente(texto: string): void {
+    const partes = texto.trim().split(/\s+/).filter(Boolean);
+    const apellidos = partes.length > 1 ? partes.pop()! : '';
+    this.nuevoDocente.set(docenteNuevo({ nombres: partes.join(' '), apellidos }));
+  }
+
+  /** El docente quedó guardado (o ya existía): se elige en el ticket */
+  protected docenteAgregado(id: number): void {
+    this.nuevoDocente.set(null);
+    this.form.update((f) => f && { ...f, docente_id: id, otroSolicitante: false, solicitante: '' });
+  }
 
   /** Lista filtrada por categoría */
   protected readonly filtrados = computed(() => {

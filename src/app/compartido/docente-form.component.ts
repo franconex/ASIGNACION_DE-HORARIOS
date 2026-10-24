@@ -37,7 +37,7 @@ export function docenteAFormulario(d: Docente): FormDocente {
 
 /**
  * Modal para crear o editar un docente con sus facultades. Es el mismo en
- * Configuración → Docentes y en el alta rápida del formulario de asignación.
+ * Configuración → Docentes y en el alta rápida de asignaciones y de atenciones.
  * Se abre al recibir datos (null = cerrado) y emite el id guardado.
  */
 @Component({
