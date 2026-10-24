@@ -602,7 +602,7 @@ interface FormTicket extends Partial<Atencion> {
     </app-modal>
 
     <!-- Alta rápida de docente: el mismo modal de Configuración → Docentes -->
-    <app-docente-form [datos]="nuevoDocente()" (cerrar)="nuevoDocente.set(null)" (guardado)="docenteAgregado($event)" />
+    <app-docente-form [datos]="nuevoDocente()" [sinContacto]="true" (cerrar)="nuevoDocente.set(null)" (guardado)="docenteAgregado($event)" />
   `,
   styles: `
     .paso { display: inline-flex; width: 1.15rem; height: 1.15rem; margin-right: 0.25rem; align-items: center; justify-content: center;
