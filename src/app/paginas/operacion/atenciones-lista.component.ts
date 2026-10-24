@@ -193,8 +193,13 @@ interface FormTicket extends Partial<Atencion> {
                   }
                 }
                 @case ('personal') {
-                  <p class="mt-0.5 text-sm"><span class="text-slate-500">Atendió a:</span> {{ det(g.primero).persona || g.primero.solicitante || '—' }}
-                    <span class="text-xs text-slate-500">{{ datosPersona(g.primero) }}</span></p>
+                  <!-- Los tickets nuevos ya no llevan nombre: solo si es estudiante, docente… y su facultad -->
+                  @if (det(g.primero).persona || g.primero.solicitante; as nombre) {
+                    <p class="mt-0.5 text-sm"><span class="text-slate-500">Atendió a:</span> {{ nombre }}
+                      <span class="text-xs text-slate-500">{{ datosPersona(g.primero) }}</span></p>
+                  } @else {
+                    <p class="mt-0.5 text-sm"><span class="text-slate-500">Atendió a:</span> {{ datosPersona(g.primero) || '—' }}</p>
+                  }
                   <p class="text-sm"><span class="text-slate-500">Motivo:</span> {{ g.primero.descripcion }}</p>
                 }
                 @case ('apertura_lab') {
@@ -480,11 +485,7 @@ interface FormTicket extends Partial<Atencion> {
               @case ('personal') {
                 <div class="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label class="etiqueta">Persona atendida *</label>
-                    <input class="campo" maxlength="120" [(ngModel)]="f.det.persona" name="persona" placeholder="Nombre y apellido">
-                  </div>
-                  <div>
-                    <label class="etiqueta">Es…</label>
+                    <label class="etiqueta">¿A quién atendiste? *</label>
                     <div class="flex flex-wrap gap-1.5">
                       @for (t of tiposPersona; track t.valor) {
                         <button type="button" class="rounded-full border px-3 py-1 text-xs font-medium transition"
@@ -918,7 +919,7 @@ export class AtencionesListaComponent implements OnInit {
         }
         return (f.descripcion?.trim().length ?? 0) < 3 ? 'Describe la falla.' : null;
       case 'personal':
-        if ((d.persona?.trim().length ?? 0) < 3) return 'Escribe el nombre de la persona atendida.';
+        if (!d.tipo_persona) return 'Indica a quién atendiste (estudiante, docente…).';
         return (f.descripcion?.trim().length ?? 0) < 3 ? 'Escribe el motivo.' : null;
       default:
         return null;
