@@ -49,7 +49,8 @@ export function docenteAFormulario(d: Docente): FormDocente {
         <form class="grid gap-3 sm:grid-cols-2" id="form-docente" (ngSubmit)="guardar()">
           <div><label class="etiqueta" for="doc-nombres">Nombres *</label><input id="doc-nombres" name="nombres" maxlength="80" class="campo" [(ngModel)]="f.nombres" autocomplete="off"></div>
           <div><label class="etiqueta" for="doc-apellidos">Apellidos *</label><input id="doc-apellidos" name="apellidos" maxlength="80" class="campo" [(ngModel)]="f.apellidos" autocomplete="off"></div>
-          @if (!sinContacto()) {
+          <!-- Al agregar solo se piden nombre, apellidos y facultades; lo demás se completa al editar -->
+          @if (f.id) {
             <div><label class="etiqueta" for="doc-carnet">Carnet</label><input id="doc-carnet" name="carnet" maxlength="20" class="campo" [(ngModel)]="f.carnet"></div>
             <div><label class="etiqueta" for="doc-telefono">Teléfono</label><input id="doc-telefono" name="telefono" maxlength="20" class="campo" [(ngModel)]="f.telefono"></div>
             <div><label class="etiqueta" for="doc-correo">Correo</label><input id="doc-correo" name="correo" maxlength="120" class="campo" type="email" [(ngModel)]="f.correo"></div>
@@ -92,10 +93,7 @@ export class DocenteFormComponent {
   private readonly notificaciones = inject(NotificacionesService);
 
   /** Docente a editar o crear (null = modal cerrado) */
-  readonly datos = input<FormDocente | null>(null);
-  /** Alta rápida (Atenciones): solo nombre, apellidos y facultades; sin carnet, teléfono ni correo */
-  readonly sinContacto = input(false);
-  readonly cerrar = output<void>();
+  readonly datos = input<FormDocente | null>(null);  readonly cerrar = output<void>();
   /** Id del docente guardado (o del que ya existía con ese nombre) */
   readonly guardado = output<number>();
 
