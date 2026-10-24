@@ -41,6 +41,7 @@ function horaLaPaz(): string {
  * se reporta y el turno en que realmente se hizo (por la hora de La Paz).
  * Un reporte se puede editar (su autor, admin o encargado), pero si ya tiene
  * tareas hechas no se puede eliminar; una tarea hecha queda fija.
+ * Cada turno se cierra una sola vez por día: si ya lo cerró otro, se avisa quién.
  */
 @Component({
   selector: 'app-turno',
@@ -94,7 +95,9 @@ function horaLaPaz(): string {
             @if (miTurno(); as mio) {
               <p class="mb-3 rounded-lg bg-marca-50 px-3 py-2 text-sm text-marca-700">
                 Tu turno{{ hoyDia().sabado ? ' de este sábado' : '' }} es <b>{{ nombreTurno[mio] }}</b> ({{ rangoDe(mio) }}).
-                @if (!enTurno()) {
+                @if (cierreHecho()) {
+                  Ya está cerrado.
+                } @else if (!enTurno()) {
                   Podrás cerrarlo desde las {{ inicioDe(mio) }}.
                 } @else if (retraso() > 0) {
                   <span class="font-semibold text-amber-700">Tu turno terminó a las {{ finDe(mio) }}: el cierre quedará con {{ textoRetraso(retraso()) }} de retraso.</span>
@@ -127,14 +130,20 @@ function horaLaPaz(): string {
               </button>
             }
           </div>
-          @if (retraso() > 0) {
+          @if (retraso() > 0 && !cierreHecho()) {
             <p class="-mt-2 mb-3 flex items-center gap-1 text-xs text-amber-700">
               <app-icono nombre="alerta" [tamano]="13" /> Este turno terminó a las {{ finDe(turno()) }}: el cierre quedará con {{ textoRetraso(retraso()) }} de retraso.
             </p>
           }
           }
 
-          @if (puedeCerrar()) {
+          @if (cierreHecho(); as c) {
+            <p class="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">
+              <app-icono nombre="ok" [tamano]="18" class="mt-0.5 shrink-0" />
+              <span>El turno <b>{{ nombreTurno[c.turno] }}</b> de hoy ya fue cerrado por <b>{{ c.autor?.nombre_completo || 'otro usuario' }}</b>
+                a las {{ c.creado_en | date: 'HH:mm' }}. No hace falta cerrarlo de nuevo; si falta algo, se puede editar ese reporte abajo.</span>
+            </p>
+          } @else if (puedeCerrar()) {
           <label class="etiqueta">Novedades / observaciones</label>
           <textarea maxlength="2000" class="campo mb-3" rows="3" [(ngModel)]="novedades" placeholder="Ej: se cortó la luz 15 min en el bloque B; el proyector del LAB-05 parpadea."></textarea>
 
@@ -350,6 +359,11 @@ export class TurnoComponent implements OnInit, OnDestroy {
     return fin ? Math.max(0, aMinutos(this.ahora()) - aMinutos(fin)) : 0;
   });
   protected readonly puedeCerrar = computed(() => this.auth.puedeOperar() && this.enTurno());
+  /** Cierre de hoy del turno elegido, si alguien ya lo hizo (un solo cierre por turno) */
+  protected readonly cierreHecho = computed<ReporteTurno | null>(() => {
+    const hoy = fechaActual(environment.zonaHoraria);
+    return this.reportes().find((r) => r.fecha === hoy && r.turno === this.turno()) ?? null;
+  });
 
   /** Hora actual de La Paz (se actualiza cada minuto) */
   protected readonly ahora = signal(horaLaPaz());
@@ -477,6 +491,11 @@ export class TurnoComponent implements OnInit, OnDestroy {
       this.notificaciones.aviso(mio ? `Podrás cerrar tu turno desde las ${this.inicioDe(mio)}.` : 'No tienes turno asignado.');
       return;
     }
+    const hecho = this.cierreHecho();
+    if (hecho) {
+      this.notificaciones.aviso(`Este turno ya fue cerrado por ${hecho.autor?.nombre_completo || 'otro usuario'}.`);
+      return;
+    }
     const tareas = this.tareasValidas();
     if (tareas.some((t) => t.descripcion.length < 3)) {
       this.notificaciones.aviso('Cada tarea debe tener al menos 3 letras.');
@@ -496,6 +515,8 @@ export class TurnoComponent implements OnInit, OnDestroy {
       await this.cargar();
     } catch (e) {
       this.notificaciones.error(e, 'No se guardó el reporte');
+      // Si otro lo cerró mientras tanto, al recargar se muestra quién
+      await this.cargar();
     } finally {
       this.guardando.set(false);
     }
