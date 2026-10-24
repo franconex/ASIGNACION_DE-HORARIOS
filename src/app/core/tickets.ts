@@ -118,6 +118,8 @@ export interface DetallesTicket {
   /** Atención personal */
   persona?: string;
   tipo_persona?: string;
+  /** Quién es, cuando tipo_persona = 'otro' (ej: visitante, padre de familia) */
+  persona_otro?: string;
   facultad?: string;
 }
 

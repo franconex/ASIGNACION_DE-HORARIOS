@@ -490,9 +490,13 @@ interface FormTicket extends Partial<Atencion> {
                       @for (t of tiposPersona; track t.valor) {
                         <button type="button" class="rounded-full border px-3 py-1 text-xs font-medium transition"
                                 [class]="f.det.tipo_persona === t.valor ? 'border-teal-500 bg-teal-600 text-white' : 'border-slate-300 text-slate-600 hover:bg-slate-100'"
-                                (click)="f.det.tipo_persona = t.valor">{{ t.texto }}</button>
+                                (click)="f.det.tipo_persona = t.valor; f.det.persona_otro = t.valor === 'otro' ? f.det.persona_otro : undefined">{{ t.texto }}</button>
                       }
                     </div>
+                    @if (f.det.tipo_persona === 'otro') {
+                      <input class="campo mt-2" maxlength="80" [(ngModel)]="f.det.persona_otro" name="persona_otro"
+                             placeholder="¿Quién es? Ej: visitante, padre de familia, personal de limpieza">
+                    }
                   </div>
                   <div>
                     <label class="etiqueta">Facultad</label>
@@ -727,10 +731,11 @@ export class AtencionesListaComponent implements OnInit {
     return (a.detalles ?? {}) as DetallesTicket;
   }
 
-  /** "Estudiante · Medicina" */
+  /** "Estudiante · Medicina" (o "Otro: visitante") */
   protected datosPersona(a: Atencion): string {
     const d = this.det(a);
-    return [textoDe(TIPOS_PERSONA, d.tipo_persona), d.facultad].filter(Boolean).join(' · ');
+    return [textoDe(TIPOS_PERSONA, d.tipo_persona) + (d.persona_otro?.trim() ? `: ${d.persona_otro.trim()}` : ''), d.facultad]
+      .filter(Boolean).join(' · ');
   }
 
   protected etiquetaSolucion(tipo: TipoAtencion): string {
@@ -920,6 +925,7 @@ export class AtencionesListaComponent implements OnInit {
         return (f.descripcion?.trim().length ?? 0) < 3 ? 'Describe la falla.' : null;
       case 'personal':
         if (!d.tipo_persona) return 'Indica a quién atendiste (estudiante, docente…).';
+        if (d.tipo_persona === 'otro' && (d.persona_otro?.trim().length ?? 0) < 3) return 'Escribe quién es (ej: visitante, padre de familia).';
         return (f.descripcion?.trim().length ?? 0) < 3 ? 'Escribe el motivo.' : null;
       default:
         return null;
@@ -1120,7 +1126,7 @@ export class AtencionesListaComponent implements OnInit {
       const extra = [
         textoDe(PEDIDOS_DOCENTE, d.pedido), d.programas, textoDe(ACCIONES_PROGRAMA, d.accion),
         (d.checklist ?? []).map((c) => textoDe(CHECKLIST_PREVENTIVO, c)).join(' / '), d.diagnostico,
-        textoDe(RESULTADOS_CORRECTIVO, d.resultado), d.persona, textoDe(TIPOS_PERSONA, d.tipo_persona), d.facultad,
+        textoDe(RESULTADOS_CORRECTIVO, d.resultado), d.persona, textoDe(TIPOS_PERSONA, d.tipo_persona), d.persona_otro, d.facultad,
       ].filter(Boolean).join(' · ');
       return [
         new Date(a.creado_en).toLocaleString('es-BO'),
