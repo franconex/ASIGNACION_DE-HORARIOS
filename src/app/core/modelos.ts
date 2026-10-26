@@ -144,20 +144,6 @@ export interface ComponentePc {
   orden: number;
 }
 
-export type TipoAlertaPc =
-  | 'fuera_de_dominio' | 'nombre_no_reconocido' | 'laboratorio_no_valido'
-  | 'nombre_duplicado' | 'cambio_hardware' | 'agente_detenido';
-
-/** Alerta abierta del agente de inventario */
-export interface AlertaPc {
-  id: number;
-  equipo_id: number;
-  tipo: TipoAlertaPc;
-  detalle: string;
-  creada_en: string;
-  equipo?: { nombre_equipo: string; pc_id: number | null } | null;
-}
-
 export interface SistemaAcademico {
   id: number;
   codigo: string;

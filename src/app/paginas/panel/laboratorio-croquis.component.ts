@@ -218,7 +218,7 @@ export function esPcDocente(pc: AmbientePc): boolean {
             <p class="flex items-center gap-1.5 text-xs text-slate-600">
               @switch (conexion(pc)) {
                 @case ('prendida') { <span class="h-2 w-2 rounded-full" [class]="conexiones.prendida.punto"></span> <b>Prendida</b> }
-                @case ('apagada') { <span class="h-2 w-2 rounded-full" [class]="conexiones.apagada.punto"></span> <b>Apagada</b> · último aviso {{ agente.ultimoLatido(pc.id) | date: 'dd/MM HH:mm' }} }
+                @case ('apagada') { <span class="h-2 w-2 rounded-full" [class]="conexiones.apagada.punto"></span> <b>Apagada</b> desde {{ agente.ultimoLatido(pc.id) | date: 'dd/MM HH:mm' }} }
                 @default { <span class="text-slate-400">Sin agente de inventario</span> }
               }
             </p>
