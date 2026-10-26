@@ -23,21 +23,45 @@ type Accion = 'instalar' | 'actualizar' | 'desinstalar' | 'configurar' | 'pedido
 @Component({
   selector: 'app-software',
   imports: [FormsModule, DatePipe, IconoComponent, ModalComponent],
+  // Escape cierra la hoja de filtros del celular
+  host: { '(document:keydown.escape)': 'filtrosAbiertos.set(false)' },
   template: `
-    <!-- RESUMEN -->
+    <!-- RESUMEN: cada cuadro también filtra con un toque -->
     <div class="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-      <div class="tarjeta p-3"><p class="text-xs text-slate-500">Programas</p><p class="text-2xl font-bold">{{ resumen().programas }}</p></div>
-      <div class="tarjeta p-3"><p class="text-xs text-slate-500">Sistemas operativos / ISOs</p><p class="text-2xl font-bold">{{ resumen().isos }}</p></div>
+      <button class="tarjeta p-3 text-left hover:border-marca-300" (click)="tipo.set('programa')">
+        <p class="text-xs text-slate-500">Programas</p><p class="text-2xl font-bold">{{ resumen().programas }}</p>
+      </button>
+      <button class="tarjeta p-3 text-left hover:border-violet-300" (click)="tipo.set('iso')">
+        <p class="text-xs text-slate-500"><span class="sm:hidden">ISOs</span><span class="hidden sm:inline">Sistemas operativos / ISOs</span></p><p class="text-2xl font-bold">{{ resumen().isos }}</p>
+      </button>
       <button class="tarjeta p-3 text-left hover:border-rose-300" (click)="licencia.set('sin_licencia')">
         <p class="text-xs text-slate-500">Sin licencia</p><p class="text-2xl font-bold text-rose-600">{{ resumen().sinLicencia }}</p>
       </button>
       <button class="tarjeta p-3 text-left hover:border-amber-300" (click)="licencia.set('por_verificar')">
-        <p class="text-xs text-slate-500">Licencia por verificar</p><p class="text-2xl font-bold text-amber-600">{{ resumen().porVerificar }}</p>
+        <p class="text-xs text-slate-500"><span class="sm:hidden">Por verificar</span><span class="hidden sm:inline">Licencia por verificar</span></p><p class="text-2xl font-bold text-amber-600">{{ resumen().porVerificar }}</p>
       </button>
     </div>
 
-    <!-- FILTROS -->
-    <div class="mb-3 flex flex-wrap items-end gap-2">
+    <!-- FILTROS EN EL CELULAR: buscador + botón "Filtros" (abre la hoja de abajo) -->
+    <div class="mb-3 flex gap-2 sm:hidden">
+      <div class="relative min-w-0 flex-1">
+        <app-icono nombre="buscar" [tamano]="16" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
+        <input class="campo !pl-9" placeholder="Buscar programa…" maxlength="60" aria-label="Buscar programa" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
+      </div>
+      <button class="btn-secundario shrink-0" (click)="filtrosAbiertos.set(true)" [attr.aria-label]="'Filtros' + (filtrosActivos() ? ', ' + filtrosActivos() + ' activos' : '')">
+        Filtros
+        @if (filtrosActivos()) { <span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-marca-600 px-1 text-[11px] font-semibold text-white">{{ filtrosActivos() }}</span> }
+      </button>
+    </div>
+    <div class="mb-3 flex gap-2 sm:hidden">
+      <button class="btn-secundario flex-1" (click)="exportarCatalogo()"><app-icono nombre="descargar" [tamano]="16" /> Exportar</button>
+      @if (auth.puedeOperar()) {
+        <button class="btn-primario flex-1" (click)="nuevo()"><app-icono nombre="agregar" [tamano]="16" /> Agregar</button>
+      }
+    </div>
+
+    <!-- FILTROS EN LA PC (los de siempre) -->
+    <div class="mb-3 hidden flex-wrap items-end gap-2 sm:flex">
       <div class="relative min-w-56 flex-1">
         <app-icono nombre="buscar" [tamano]="16" class="absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
         <input class="campo !pl-9" placeholder="Buscar programa, categoría o carrera…" maxlength="60" [ngModel]="busqueda()" (ngModelChange)="busqueda.set($event)">
@@ -65,8 +89,35 @@ type Accion = 'instalar' | 'actualizar' | 'desinstalar' | 'configurar' | 'pedido
         <button class="text-marca-600 hover:underline" (click)="limpiarFiltros()">Quitar filtros</button></p>
     }
 
-    <!-- LISTA DE SOFTWARE -->
-    <div class="tarjeta mb-8 overflow-x-auto">
+    <!-- LISTA EN EL CELULAR: una tarjeta por programa (no se sale de la pantalla) -->
+    <div class="mb-8 space-y-2 sm:hidden">
+      @for (s of filtrados(); track s.id) {
+        <div class="tarjeta p-3" [class.opacity-50]="!s.activo">
+          <div class="flex items-start justify-between gap-2">
+            <p class="min-w-0 font-semibold [overflow-wrap:anywhere]">{{ s.nombre }}@if (s.version) { <span class="font-normal text-slate-500"> {{ s.version }}</span> }</p>
+            <div class="flex shrink-0 flex-wrap justify-end gap-1">
+              @if (s.tipo === 'iso') { <span class="chip bg-violet-100 text-violet-700">ISO</span> }
+              <span class="chip whitespace-nowrap" [class]="licenciasInfo[s.licencia].clase">{{ licenciasInfo[s.licencia].texto }}</span>
+            </div>
+          </div>
+          <p class="mt-1 text-sm text-slate-500">{{ textoUso(s) }}</p>
+          @if (s.notas) { <p class="mt-1 text-xs text-slate-500">{{ s.notas }}</p> }
+          @if (!s.activo || auth.puedeOperar()) {
+            <div class="mt-2 flex items-center justify-between gap-2">
+              @if (!s.activo) { <span class="chip bg-slate-200 text-slate-600">Oculto</span> } @else { <span></span> }
+              @if (auth.puedeOperar()) {
+                <button class="btn-fantasma btn-sm" (click)="editar(s)"><app-icono nombre="editar" [tamano]="15" /> Editar</button>
+              }
+            </div>
+          }
+        </div>
+      } @empty {
+        <p class="tarjeta p-6 text-center text-sm text-slate-500">{{ sw.cargado() ? 'Ningún software coincide.' : 'Cargando…' }}</p>
+      }
+    </div>
+
+    <!-- LISTA EN LA PC: la tabla de siempre -->
+    <div class="tarjeta mb-8 hidden overflow-x-auto sm:block">
       <table class="tabla">
         <thead><tr><th class="min-w-56">Software</th><th>Categoría</th><th>Licencia</th><th>Carreras / uso</th><th></th></tr></thead>
         <tbody>
@@ -108,8 +159,20 @@ type Accion = 'instalar' | 'actualizar' | 'desinstalar' | 'configurar' | 'pedido
         </div>
       </div>
 
-      <div class="grid gap-3 lg:grid-cols-2">
-        <div class="tarjeta overflow-x-auto">
+      <!-- grid-cols-1 + min-w-0: sin esto la tabla estira la columna y la página se sale a la derecha en el celular -->
+      <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <!-- Conteo por programa en el celular: filas que caben en la pantalla -->
+        <div class="tarjeta min-w-0 divide-y divide-slate-100 sm:hidden">
+          @for (r of porSoftware(); track r.nombre) {
+            <div class="px-3 py-2 text-sm">
+              <p class="font-medium [overflow-wrap:anywhere]">{{ r.nombre }}</p>
+              <p class="text-xs text-slate-500">{{ resumenConteo(r) }}</p>
+            </div>
+          } @empty {
+            <p class="py-6 text-center text-sm text-slate-500">Aún no hay tickets con software del catálogo en este periodo.</p>
+          }
+        </div>
+        <div class="tarjeta hidden min-w-0 overflow-x-auto sm:block">
           <table class="tabla">
             <thead><tr><th>Software</th><th class="text-right">Instaló</th><th class="text-right">Actualizó</th><th class="text-right">Desinstaló</th><th class="text-right">Pedidos docentes</th></tr></thead>
             <tbody>
@@ -127,14 +190,18 @@ type Accion = 'instalar' | 'actualizar' | 'desinstalar' | 'configurar' | 'pedido
             </tbody>
           </table>
         </div>
-        <div class="tarjeta max-h-[28rem] divide-y divide-slate-100 overflow-y-auto">
+        <!-- Línea de tiempo: un punto de color por acción -->
+        <div class="tarjeta max-h-[28rem] min-w-0 divide-y divide-slate-100 overflow-y-auto">
           @for (m of movimientos(); track m.id) {
-            <div class="px-3 py-2 text-sm">
-              <p><span class="font-medium">{{ textoAccion(m) }}</span> · {{ nombresSoftware(m) }}</p>
+            <div class="flex gap-2.5 px-3 py-2 text-sm">
+              <span class="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" [class]="colorAccion(m)"></span>
+              <div class="min-w-0">
+              <p class="[overflow-wrap:anywhere]"><span class="font-medium">{{ textoAccion(m) }}</span> · {{ nombresSoftware(m) }}</p>
               <p class="text-xs text-slate-500">
                 {{ m.creado_en | date: 'dd/MM/yyyy HH:mm' }} · {{ m.ambiente?.codigo || 'Sin lab' }} · {{ m.autor?.nombre_completo || '—' }}
                 @if (pidio(m); as d) { · lo pidió {{ d }} }
               </p>
+              </div>
             </div>
           } @empty {
             <p class="py-6 text-center text-sm text-slate-500">Sin movimientos en este periodo.</p>
@@ -142,6 +209,49 @@ type Accion = 'instalar' | 'actualizar' | 'desinstalar' | 'configurar' | 'pedido
         </div>
       </div>
     </section>
+
+    <!-- HOJA DE FILTROS DEL CELULAR (sube desde abajo) -->
+    @if (filtrosAbiertos()) {
+      <div class="fixed inset-0 z-50 sm:hidden">
+        <div class="absolute inset-0 bg-black/45" (click)="filtrosAbiertos.set(false)"></div>
+        <div class="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-superficie px-4 pb-5 pt-2 shadow-xl" role="dialog" aria-modal="true" aria-label="Filtros">
+          <div class="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-300"></div>
+          <p class="mb-3 text-lg font-semibold">Filtros</p>
+
+          <p class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Tipo</p>
+          <div class="mb-4 flex flex-wrap gap-1.5">
+            @for (t of opcionesTipo; track t.texto) {
+              <button class="h-9 rounded-full border px-3 text-sm" [attr.aria-pressed]="tipo() === t.valor"
+                      [class]="tipo() === t.valor ? 'border-marca-600 bg-marca-600 font-semibold text-white' : 'border-slate-300'"
+                      (click)="tipo.set(t.valor)">{{ t.texto }}</button>
+            }
+          </div>
+
+          <p class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Licencia</p>
+          <div class="mb-4 flex flex-wrap gap-1.5">
+            <button class="h-9 rounded-full border px-3 text-sm" [attr.aria-pressed]="!licencia()"
+                    [class]="!licencia() ? 'border-marca-600 bg-marca-600 font-semibold text-white' : 'border-slate-300'"
+                    (click)="licencia.set(null)">Todas</button>
+            @for (l of licencias; track l.valor) {
+              <button class="h-9 rounded-full border px-3 text-sm" [attr.aria-pressed]="licencia() === l.valor"
+                      [class]="licencia() === l.valor ? 'border-marca-600 bg-marca-600 font-semibold text-white' : 'border-slate-300'"
+                      (click)="licencia.set(l.valor)">{{ l.texto }}</button>
+            }
+          </div>
+
+          <label class="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="sw-cat-movil">Categoría</label>
+          <select id="sw-cat-movil" class="campo mb-5" [ngModel]="categoria()" (ngModelChange)="categoria.set($event)">
+            <option [ngValue]="null">Todas las categorías</option>
+            @for (c of categorias(); track c) { <option [ngValue]="c">{{ c }}</option> }
+          </select>
+
+          <div class="flex gap-2">
+            <button class="btn-secundario flex-1" (click)="limpiarFiltros()">Limpiar</button>
+            <button class="btn-primario flex-1" (click)="filtrosAbiertos.set(false)">Ver {{ filtrados().length }} resultado(s)</button>
+          </div>
+        </div>
+      </div>
+    }
 
     <!-- AGREGAR / EDITAR SOFTWARE -->
     <app-modal [abierto]="!!form()" [titulo]="form()?.id ? 'Editar software' : 'Agregar software'" (cerrar)="form.set(null)">
@@ -196,6 +306,14 @@ export class SoftwareComponent implements OnInit {
   protected readonly licencia = signal<LicenciaSoftware | null>(null);
   protected readonly guardando = signal(false);
   protected readonly form = signal<Partial<Software> | null>(null);
+  /** Hoja de filtros del celular */
+  protected readonly filtrosAbiertos = signal(false);
+  /** Opciones de tipo en la hoja de filtros */
+  protected readonly opcionesTipo: { valor: TipoSoftware | null; texto: string }[] = [
+    { valor: null, texto: 'Todos' }, { valor: 'programa', texto: 'Programas' }, { valor: 'iso', texto: 'ISOs' },
+  ];
+  /** Cuántos filtros hay puestos (para el número del botón "Filtros") */
+  protected readonly filtrosActivos = computed(() => [this.tipo(), this.categoria(), this.licencia()].filter(Boolean).length);
 
   protected readonly periodo = signal(30);
   protected readonly movimientos = signal<MovimientoSoftware[]>([]);
@@ -305,6 +423,27 @@ export class SoftwareComponent implements OnInit {
 
   protected nombresSoftware(m: MovimientoSoftware): string {
     return this.listaNombres(m).join(', ') || m.detalles.programas || '—';
+  }
+
+  /** Color del punto de cada acción en la línea de tiempo */
+  protected colorAccion(m: MovimientoSoftware): string {
+    const colores: Record<Accion, string> = {
+      instalar: 'bg-emerald-600', actualizar: 'bg-amber-500', desinstalar: 'bg-rose-600', configurar: 'bg-slate-500', pedido: 'bg-marca-600',
+    };
+    return colores[this.accion(m)] ?? 'bg-slate-400';
+  }
+
+  /** "Categoría · carreras" de una tarjeta del celular */
+  protected textoUso(s: Software): string {
+    return [s.categoria, s.uso].filter(Boolean).join(' · ') || 'Sin categoría';
+  }
+
+  /** "Instaló 3 · Actualizó 1 · 2 pedidos" para el conteo del celular */
+  protected resumenConteo(r: { instalar: number; actualizar: number; desinstalar: number; docentes: number }): string {
+    return [
+      r.instalar ? `Instaló ${r.instalar}` : '', r.actualizar ? `Actualizó ${r.actualizar}` : '',
+      r.desinstalar ? `Desinstaló ${r.desinstalar}` : '', r.docentes ? `${r.docentes} pedido(s) de docentes` : '',
+    ].filter(Boolean).join(' · ');
   }
 
   protected textoAccion(m: MovimientoSoftware): string {

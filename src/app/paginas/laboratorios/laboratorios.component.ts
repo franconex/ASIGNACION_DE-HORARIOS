@@ -8,6 +8,7 @@ import { fechaActual } from '../../core/fechas';
 import { Ambiente } from '../../core/modelos';
 import { PanelesService } from '../../core/paneles.service';
 import { AmbientesComponent } from '../catalogos/ambientes.component';
+import { PcsOtrosComponent } from './pcs-otros.component';
 import { SoftwareComponent } from './software.component';
 
 /** Texto y color de cada estado de laboratorio */
@@ -25,7 +26,7 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
  */
 @Component({
   selector: 'app-laboratorios',
-  imports: [IconoComponent, AmbientesComponent, SoftwareComponent],
+  imports: [IconoComponent, AmbientesComponent, SoftwareComponent, PcsOtrosComponent],
   template: `
     <header class="mb-4">
       <h1 class="text-2xl font-semibold tracking-tight">Laboratorios</h1>
@@ -78,6 +79,9 @@ const ESTADOS: Record<string, { texto: string; clase: string }> = {
         <p class="tarjeta col-span-full p-8 text-center text-sm text-slate-500">No hay laboratorios cargados.</p>
       }
     </div>
+
+    <!-- PCs en "Otros" y alertas del agente de inventario -->
+    <app-pcs-otros />
 
     @if (auth.puedeEditar()) {
       <section class="mt-8 border-t border-slate-200 pt-6">

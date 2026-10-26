@@ -101,6 +101,63 @@ export interface AmbientePc {
   cambio?: { nombre_completo: string } | null;
 }
 
+/** Conexión de una PC según el agente de inventario */
+export type ConexionPc = 'prendida' | 'apagada' | 'sin_agente';
+
+/** Máquina física que reporta el agente (script 56); pc_id es su figurita */
+export interface EquipoPc {
+  id: number;
+  pc_id: number | null;
+  nombre_equipo: string;
+  en_dominio: boolean;
+  dominio: string | null;
+  fabricante: string | null;
+  modelo: string | null;
+  numero_serie: string | null;
+  procesador: string | null;
+  nucleos: number | null;
+  hilos: number | null;
+  memoria_total_gb: number | null;
+  placa_fabricante: string | null;
+  placa_modelo: string | null;
+  placa_serie: string | null;
+  sistema_operativo: string | null;
+  version_so: string | null;
+  arquitectura: string | null;
+  ip: string | null;
+  mac: string | null;
+  version_agente: string | null;
+  inventario_en: string | null;
+}
+
+/** RAM, disco, video o red de un equipo */
+export interface ComponentePc {
+  id: number;
+  equipo_id: number;
+  tipo: 'ram' | 'disco' | 'video' | 'red';
+  descripcion: string;
+  fabricante: string | null;
+  capacidad_gb: number | null;
+  detalle: string | null;
+  ranura: string | null;
+  numero_serie: string | null;
+  orden: number;
+}
+
+export type TipoAlertaPc =
+  | 'fuera_de_dominio' | 'nombre_no_reconocido' | 'laboratorio_no_valido'
+  | 'nombre_duplicado' | 'cambio_hardware' | 'agente_detenido';
+
+/** Alerta abierta del agente de inventario */
+export interface AlertaPc {
+  id: number;
+  equipo_id: number;
+  tipo: TipoAlertaPc;
+  detalle: string;
+  creada_en: string;
+  equipo?: { nombre_equipo: string; pc_id: number | null } | null;
+}
+
 export interface SistemaAcademico {
   id: number;
   codigo: string;
