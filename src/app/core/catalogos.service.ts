@@ -133,6 +133,15 @@ export class CatalogosService {
     return data as T;
   }
 
+  /** Guarda el acomodo del croquis de un laboratorio: tamaño de la cuadrícula y casilla de cada PC */
+  async guardarCroquis(ambienteId: number, filas: number, columnas: number,
+                       posiciones: { pc_id: number; fila: number; columna: number }[], filaDocente: number | null): Promise<void> {
+    await this.supabase.rpc('rpc_guardar_croquis', {
+      p_ambiente_id: ambienteId, p_filas: filas, p_columnas: columnas, p_posiciones: posiciones, p_docente_fila: filaDocente,
+    });
+    await Promise.all([this.recargar('ambientes'), this.recargar('ambiente_pcs')]);
+  }
+
   /** Elimina una fila de un catálogo y refresca la lista */
   async eliminar(tabla: TablaCatalogo, valor: unknown, clave = 'id'): Promise<void> {
     const { error } = await this.supabase.cliente.from(tabla).delete().eq(clave, valor);

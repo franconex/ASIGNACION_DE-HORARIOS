@@ -26,6 +26,7 @@
     "@fullcalendar/list": "^6.1.21",
     "@fullcalendar/timegrid": "^6.1.21",
     "@supabase/supabase-js": "^2.117.2",
+    "exceljs": "^4.4.0",
     "jspdf": "^3.0.4",
     "jspdf-autotable": "^5.0.9",
     "lucide": "^1.52.0",

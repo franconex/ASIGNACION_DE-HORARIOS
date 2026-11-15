@@ -8,7 +8,8 @@ export function descargarCsv(nombreArchivo: string, encabezados: string[], filas
   const blob = new Blob(['﻿' + contenido], { type: 'text/csv;charset=utf-8' });
   const enlace = document.createElement('a');
   enlace.href = URL.createObjectURL(blob);
-  enlace.download = nombreArchivo.replace(/\s+/g, '_');
+  // Sin la extensión .csv, Windows no lo abre con Excel
+  enlace.download = nombreArchivo.replace(/\s+/g, '_').replace(/(\.csv)?$/i, '.csv');
   enlace.click();
   URL.revokeObjectURL(enlace.href);
 }

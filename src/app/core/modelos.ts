@@ -73,6 +73,9 @@ export interface Ambiente {
   estado: EstadoAmbiente;
   color: string;
   orden: number;
+  /** Tamaño de la cuadrícula del croquis (null: acomodo automático de siempre) */
+  croquis_filas: number | null;
+  croquis_columnas: number | null;
 }
 
 export type EstadoPc = 'operativa' | 'inactiva' | 'mantenimiento' | 'baja';
@@ -90,6 +93,9 @@ export interface AmbientePc {
   orden: number;
   /** PC de la mesa del docente (PCDOCENTE1…) */
   es_docente: boolean;
+  /** Casilla en el croquis (null: sin ubicar) */
+  croquis_fila: number | null;
+  croquis_columna: number | null;
   /** Solo si está de baja: por qué, cuándo y quién */
   motivo_baja: string | null;
   baja_en: string | null;
