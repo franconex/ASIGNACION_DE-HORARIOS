@@ -67,6 +67,7 @@ export const ACCIONES_PROGRAMA = [
 export const CHECKLIST_PREVENTIVO = [
   { valor: 'limpieza_fisica', texto: 'Limpieza física' },
   { valor: 'temporales', texto: 'Limpieza de temporales' },
+  { valor: 'archivos', texto: 'Limpieza de archivos' },
   { valor: 'antivirus', texto: 'Antivirus' },
   { valor: 'actualizaciones', texto: 'Actualizaciones' },
   { valor: 'cables', texto: 'Cables y periféricos' },
