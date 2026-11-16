@@ -558,8 +558,9 @@ interface FormTicket extends Partial<Atencion> {
               <app-icono nombre="siguiente" [tamano]="14" class="ml-auto text-slate-400 transition" [class.rotate-90]="colabAbierto()" />
             </button>
             @if (colabAbierto()) {
-              <div class="fixed inset-0 z-10" (click)="colabAbierto.set(false)"></div>
-              <div class="absolute inset-x-0 z-20 mt-1 max-h-80 overflow-y-auto rounded-lg border border-slate-200 bg-superficie p-1 shadow-lg">
+              <!-- En PC flota sobre el formulario; en el celular va dentro del flujo (el teclado y el modal a pantalla completa la tapaban) -->
+              <div class="fixed inset-0 z-10 hidden sm:block" (click)="colabAbierto.set(false)"></div>
+              <div #panelColab class="mt-1 max-h-[60vh] overflow-y-auto rounded-lg border border-slate-200 bg-superficie p-1 shadow-sm sm:absolute sm:inset-x-0 sm:z-20 sm:max-h-80 sm:shadow-lg">
                 <div class="sticky top-0 z-10 bg-superficie p-1">
                   <div class="relative">
                     <app-icono nombre="buscar" [tamano]="15" class="absolute top-1/2 left-2.5 -translate-y-1/2 text-slate-400" />
@@ -647,6 +648,7 @@ export class AtencionesListaComponent implements OnInit {
   /** Texto para buscar colaboradores (solo filtra: no se puede escribir un nombre que no exista) */
   protected readonly busquedaColab = signal('');
   private readonly buscarColab = viewChild<ElementRef<HTMLInputElement>>('buscarColab');
+  private readonly panelColab = viewChild<ElementRef<HTMLElement>>('panelColab');
   /** Fichas de reparación del correctivo nuevo */
   private readonly fichas = viewChild(FichasReparacionComponent);
   /** Compañeros agrupados para la lista desplegable, filtrados por la búsqueda */
@@ -760,8 +762,15 @@ export class AtencionesListaComponent implements OnInit {
   protected abrirColaboradores(): void {
     this.busquedaColab.set('');
     this.colabAbierto.set(!this.colabAbierto());
-    // Foco en el buscador para escribir directo
-    setTimeout(() => this.buscarColab()?.nativeElement.focus());
+    setTimeout(() => {
+      if (window.matchMedia('(min-width: 640px)').matches) {
+        // PC: foco en el buscador para escribir directo
+        this.buscarColab()?.nativeElement.focus();
+      } else {
+        // Celular: sin abrir el teclado (tapaba la lista); solo llevar la lista a la vista
+        this.panelColab()?.nativeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
   }
 
   /** Enter en el buscador: marca al primero que coincide */
