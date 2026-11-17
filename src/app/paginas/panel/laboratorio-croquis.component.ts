@@ -29,10 +29,24 @@ type Casilla2 = { f: number; c: number };
  * Acomodo de un laboratorio: tamaño de la cuadrícula, casilla de cada PC
  * (null: sin ubicar) y fila de la PC docente dentro de su zona.
  */
-interface Acomodo { filas: number; columnas: number; pos: Record<number, Casilla | null>; docente: number }
+interface Acomodo {
+  filas: number; columnas: number; pos: Record<number, Casilla | null>; docente: number;
+  /** Lugares vacíos: puesto de la mesa sin PC (no corta la mesa y tiene el tamaño de un puesto) */
+  huecos: Casilla[];
+}
 
 function clonarAcomodo(a: Acomodo): Acomodo {
-  return { filas: a.filas, columnas: a.columnas, pos: { ...a.pos }, docente: a.docente };
+  return { filas: a.filas, columnas: a.columnas, pos: { ...a.pos }, docente: a.docente, huecos: a.huecos.map((h) => [h[0], h[1]] as Casilla) };
+}
+
+/** ¿Hay un lugar vacío en la casilla? */
+function hayHueco(a: Acomodo, f: number, c: number): boolean {
+  return a.huecos.some((h) => h[0] === f && h[1] === c);
+}
+
+/** Quita el lugar vacío de la casilla (si lo hay) */
+function sacarHueco(a: Acomodo, f: number, c: number): void {
+  a.huecos = a.huecos.filter((h) => h[0] !== f || h[1] !== c);
 }
 
 /**
@@ -41,7 +55,7 @@ function clonarAcomodo(a: Acomodo): Acomodo {
  * son pasillos.
  */
 function recortarFinal(a: Acomodo, hayDocente: boolean): void {
-  const usadas = Object.values(a.pos).filter((p): p is Casilla => !!p);
+  const usadas = [...Object.values(a.pos).filter((p): p is Casilla => !!p), ...a.huecos];
   const ultimaCol = Math.max(-1, ...usadas.map((p) => p[1]));
   const ultimaFila = Math.max(-1, hayDocente ? a.docente : -1, ...usadas.map((p) => p[0]));
   a.columnas = Math.max(1, ultimaCol + 1);
@@ -65,7 +79,7 @@ function acomodoPlantilla(pcs: AmbientePc[], porMesa: number, mesasFila: number,
     const mc = mesa % mesasFila;
     pos[pc.id] = [Math.floor(mesa / mesasFila) * (porMesa + 1) + (i % porMesa), mc + (pasilloCada > 0 ? Math.floor(mc / pasilloCada) : 0)];
   });
-  return { filas: filasMesas * (porMesa + 1) - 1, columnas: enFila + pasillos, pos, docente: 0 };
+  return { filas: filasMesas * (porMesa + 1) - 1, columnas: enFila + pasillos, pos, docente: 0, huecos: [] };
 }
 
 /** Quita la fila o columna k (vacía) y corre las de después */
@@ -75,6 +89,8 @@ function quitarLinea(a: Acomodo, tipo: 'col' | 'fila', k: number): void {
     const p = a.pos[id];
     if (p && p[i] > k) a.pos[id] = i ? [p[0], p[1] - 1] : [p[0] - 1, p[1]];
   }
+  // Los lugares vacíos de esa línea se van; los de después se corren
+  a.huecos = a.huecos.filter((h) => h[i] !== k).map((h) => (h[i] > k ? (i ? [h[0], h[1] - 1] : [h[0] - 1, h[1]]) : h) as Casilla);
   if (i) a.columnas--;
   else {
     a.filas--;
@@ -154,8 +170,13 @@ export function esPcDocente(pc: AmbientePc): boolean {
             <button type="button" class="btn-secundario btn-sm" (click)="deshacer()" [disabled]="!historial().length" title="Deshacer (Ctrl+Z)">
               <app-icono nombre="deshacer" [tamano]="14" /><span class="hidden sm:inline">Deshacer</span>
             </button>
+            <button type="button" class="btn-sm" [class]="modoHueco() ? 'btn-primario' : 'btn-secundario'"
+                    (click)="alternarModoHueco()" [attr.aria-pressed]="modoHueco()"
+                    title="Marcar puestos de la mesa sin PC: no cortan la mesa y guardan el espacio">
+              <span class="inline-block h-3 w-3.5 rounded-[3px] border-2 border-dashed border-current"></span> Lugar vacío
+            </button>
             <button type="button" class="btn-sm" [class]="verPlantilla() ? 'btn-primario' : 'btn-secundario'"
-                    (click)="verPlantilla.set(!verPlantilla()); menuCab.set(null)" title="Armar el plano de una vez">
+                    (click)="verPlantilla.set(!verPlantilla()); menuCab.set(null); modoHueco.set(false)" title="Armar el plano de una vez">
               <app-icono nombre="grilla" [tamano]="14" /> Plantilla
             </button>
             <button type="button" class="btn-secundario btn-sm" (click)="salirEdicion()" [disabled]="guardandoCroquis()">Cancelar</button>
@@ -233,6 +254,10 @@ export function esPcDocente(pc: AmbientePc): boolean {
               </label>
               <button type="button" class="btn-primario btn-sm" (click)="aplicarPlantilla()">Aplicar</button>
             </div>
+          } @else if (modoHueco()) {
+            <p class="mb-2 rounded-lg border border-marca-300 bg-marca-50 px-3 py-1 text-xs text-marca-700">
+              <b>Lugar vacío:</b> toca una casilla para dejar un puesto sin PC dentro de la mesa (no la corta); tócalo otra vez para quitarlo.
+            </p>
           } @else if (menuCab(); as m) {
             <!-- Insertar o quitar la columna / fila tocada en el borde -->
             <div class="mb-2 flex flex-wrap items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-sm">
@@ -297,7 +322,7 @@ export function esPcDocente(pc: AmbientePc): boolean {
                       @if (c < acomodo().columnas) {
                         <button type="button" class="min-h-6 rounded text-[11px] font-semibold transition"
                                 [class]="menuCab()?.tipo === 'col' && menuCab()?.k === c ? 'bg-marca-100 text-marca-700' : 'text-slate-400 hover:bg-slate-200'"
-                                (click)="tocarCabecera('col', c)">{{ letra(c) }}</button>
+                                (click)="tocarCabecera('col', c); modoHueco.set(false)">{{ letra(c) }}</button>
                       } @else { <span></span> }
                     }
                   </div>
@@ -306,7 +331,7 @@ export function esPcDocente(pc: AmbientePc): boolean {
                       @if (f < acomodo().filas) {
                         <button type="button" class="min-w-6 rounded px-1 text-[11px] font-semibold transition"
                                 [class]="menuCab()?.tipo === 'fila' && menuCab()?.k === f ? 'bg-marca-100 text-marca-700' : 'text-slate-400 hover:bg-slate-200'"
-                                (click)="tocarCabecera('fila', f)">{{ f + 1 }}</button>
+                                (click)="tocarCabecera('fila', f); modoHueco.set(false)">{{ f + 1 }}</button>
                       } @else { <span></span> }
                     }
                   </div>
@@ -317,7 +342,7 @@ export function esPcDocente(pc: AmbientePc): boolean {
                     @for (celda of v.celdas; track celda.f + '-' + celda.c) {
                       <div class="z-0 flex items-center justify-center rounded-md border border-dashed text-sm"
                            [class]="(celda.nueva ? 'border-marca-300 bg-marca-50/60 text-marca-300' : 'border-slate-300/70 bg-superficie/60')
-                                    + (elegida() ? ' cursor-pointer hover:border-marca-500 hover:bg-marca-50' : '')"
+                                    + (elegida() || modoHueco() ? ' cursor-pointer hover:border-marca-500 hover:bg-marca-50' : '')"
                            [attr.data-f]="celda.f" [attr.data-c]="celda.c"
                            [style.grid-row]="celda.f + 1" [style.grid-column]="celda.c + 1"
                            (click)="tocarCelda(celda.f, celda.c)">{{ celda.nueva ? '＋' : '' }}</div>
@@ -326,6 +351,12 @@ export function esPcDocente(pc: AmbientePc): boolean {
                   @for (m of v.mesas; track m.c + '-' + m.desde) {
                     <div class="pointer-events-none z-[1] -m-0.5 rounded-md border-2 border-slate-300 bg-superficie shadow-sm sm:-m-1"
                          [style.grid-column]="m.c + 1" [style.grid-row]="(m.desde + 1) + ' / ' + (m.hasta + 2)"></div>
+                  }
+                  <!-- Lugares vacíos: puesto de la mesa sin PC (al editar no tapan la casilla: se toca a través) -->
+                  @for (h of v.huecos; track h.f + '-' + h.c) {
+                    <div class="pointer-events-none relative z-[2] flex items-center justify-center rounded-md border-2 border-dashed border-slate-300 text-[9px] text-slate-400 sm:text-[10px]"
+                         [class.border-marca-300]="modoHueco()"
+                         [style.grid-row]="h.f + 1" [style.grid-column]="h.c + 1">vacío</div>
                   }
                   @for (u of v.ubicadas; track u.pc.id) {
                     <div class="relative z-[2] flex items-center" [style.grid-row]="u.f + 1" [style.grid-column]="u.c + 1">
@@ -649,7 +680,15 @@ export class LaboratorioCroquisComponent {
       pos[pc.id] = f !== null && c !== null && f < filas && c < columnas ? [f, c] : null;
     }
     const filaDocente = this.docente()?.croquis_fila ?? 0;
-    return { filas, columnas, pos, docente: Math.min(Math.max(0, filaDocente), filas - 1) };
+    // Lugares vacíos dentro de la cuadrícula y que no pisan una PC
+    const conPc = new Set(Object.values(pos).filter((p): p is Casilla => !!p).map((p) => p[0] + '-' + p[1]));
+    const huecos: Casilla[] = [];
+    for (const h of Array.isArray(lab.croquis_huecos) ? lab.croquis_huecos : []) {
+      const f = Number(h?.[0]), c = Number(h?.[1]);
+      if (Number.isInteger(f) && Number.isInteger(c) && f >= 0 && c >= 0 && f < filas && c < columnas
+          && !conPc.has(f + '-' + c) && !huecos.some((x) => x[0] === f && x[1] === c)) huecos.push([f, c]);
+    }
+    return { filas, columnas, pos, docente: Math.min(Math.max(0, filaDocente), filas - 1), huecos };
   });
 
   // ---- Acomodar el croquis (arrastrar las PCs) ----
@@ -667,6 +706,8 @@ export class LaboratorioCroquisComponent {
   /** Columna o fila tocada en el borde (insertar / quitar) */
   protected readonly menuCab = signal<{ tipo: 'col' | 'fila'; k: number } | null>(null);
   protected readonly verPlantilla = signal(false);
+  /** Modo "Lugar vacío": tocar una casilla pone o quita un lugar vacío */
+  protected readonly modoHueco = signal(false);
   protected readonly plantillaPorMesa = signal(PCS_POR_MESA);
   protected readonly plantillaMesasFila = signal(MESAS_POR_FILA);
   protected readonly plantillaPasillo = signal(0);
@@ -704,7 +745,10 @@ export class LaboratorioCroquisComponent {
         ocupada.add(p[0] + '-' + p[1]);
       } else sinUbicar.push(pc);
     }
-    // Mesa = PCs seguidas en una misma columna
+    // Los lugares vacíos cuentan como puesto de la mesa (no la cortan)
+    const huecos = a.huecos.map(([f, c]) => ({ f, c }));
+    for (const h of huecos) ocupada.add(h.f + '-' + h.c);
+    // Mesa = PCs (o lugares vacíos) seguidos en una misma columna
     const mesas: { c: number; desde: number; hasta: number }[] = [];
     for (let c = 0; c < a.columnas; c++) {
       let desde: number | null = null;
@@ -721,8 +765,8 @@ export class LaboratorioCroquisComponent {
     if (ed) for (let f = 0; f < filas; f++) for (let c = 0; c < columnas; c++) celdas.push({ f, c, nueva: f >= a.filas || c >= a.columnas });
     // Tamaño de columnas y filas: las mesas llenan el ancho (como antes); fuera de la
     // edición, una columna vacía (pasillo) o una fila vacía entre mesas queda angosta
-    const colUsada = new Set(ubicadas.map((u) => u.c));
-    const filaUsada = new Set(ubicadas.map((u) => u.f));
+    const colUsada = new Set([...ubicadas, ...huecos].map((u) => u.c));
+    const filaUsada = new Set([...ubicadas, ...huecos].map((u) => u.f));
     if (this.docente()) filaUsada.add(a.docente);
     // Al editar, las vacías y la franja ＋ quedan algo más anchas para poder soltar ahí (sin mucho scroll)
     const plantillaColumnas = Array.from({ length: columnas }, (_, c) =>
@@ -730,7 +774,7 @@ export class LaboratorioCroquisComponent {
     const plantillaFilas = Array.from({ length: filas }, (_, f) =>
       filaUsada.has(f) ? 'var(--alto-celda)' : ed ? '1.5rem' : '0.5rem').join(' ');
     return {
-      filas, columnas, ubicadas, sinUbicar, mesas, celdas, plantillaColumnas, plantillaFilas,
+      filas, columnas, ubicadas, sinUbicar, huecos, mesas, celdas, plantillaColumnas, plantillaFilas,
       indicesCol: Array.from({ length: columnas }, (_, i) => i),
       indicesFila: Array.from({ length: filas }, (_, i) => i),
     };
@@ -772,6 +816,7 @@ export class LaboratorioCroquisComponent {
     this.elegida.set(null);
     this.menuCab.set(null);
     this.verPlantilla.set(false);
+    this.modoHueco.set(false);
   }
 
   /**
@@ -831,7 +876,8 @@ export class LaboratorioCroquisComponent {
         cambiaronEstados = true;
       }
       // 3) Guardar el acomodo
-      await this.catalogos.guardarCroquis(this.ambienteId(), a.filas, a.columnas, posiciones, this.docente() ? a.docente : null);
+      await this.catalogos.guardarCroquis(this.ambienteId(), a.filas, a.columnas, posiciones, this.docente() ? a.docente : null,
+        a.huecos.filter(([f, c]) => f < a.filas && c < a.columnas && !posiciones.some((p) => p.fila === f && p.columna === c)));
       void this.cargarSolicitudes();
       this.salirEdicion();
       this.notificaciones.exito('Croquis guardado.'
@@ -904,6 +950,7 @@ export class LaboratorioCroquisComponent {
         b.columnas = Math.max(b.columnas, c + 1); // soltó en la franja ＋ de la derecha
         const otra = Object.keys(b.pos).map(Number).find((k) => k !== id && b.pos[k]?.[0] === f && b.pos[k]?.[1] === c);
         if (otra !== undefined) b.pos[otra] = origen;
+        sacarHueco(b, f, c); // la PC ocupa el lugar vacío
       }
       b.pos[id] = destino;
     });
@@ -941,6 +988,7 @@ export class LaboratorioCroquisComponent {
         const p = b.pos[id];
         if (p && p[i] >= desde) b.pos[id] = i ? [p[0], p[1] + 1] : [p[0] + 1, p[1]];
       }
+      b.huecos = b.huecos.map((h) => (h[i] >= desde ? (i ? [h[0], h[1] + 1] : [h[0] + 1, h[1]]) : h) as Casilla);
       if (i) b.columnas++;
       else {
         b.filas++;
@@ -972,6 +1020,7 @@ export class LaboratorioCroquisComponent {
 
   /** Editando: tocar una PC la elige; si ya había otra elegida, se intercambian */
   private tocarEnEdicion(pc: AmbientePc): void {
+    this.modoHueco.set(false);
     const yo = this.elegida();
     const idDocente = this.docente()?.id;
     // La PC docente no se intercambia con las de alumnos: solo cambia cuál está elegida
@@ -989,10 +1038,36 @@ export class LaboratorioCroquisComponent {
   }
 
   protected tocarCelda(f: number, c: number): void {
+    if (this.modoHueco()) {
+      if (Date.now() - this.finArrastre < 350) return;
+      this.alternarHueco(f, c);
+      return;
+    }
     const id = this.elegida();
     if (!id || id === this.docente()?.id || Date.now() - this.finArrastre < 350) return;
     this.elegida.set(null);
     this.moverPc(id, [f, c]);
+  }
+
+  /** Pone o quita un lugar vacío en una casilla sin PC */
+  private alternarHueco(f: number, c: number): void {
+    if (this.hayOtraEn(f, c)) return;
+    if (!hayHueco(this.acomodo(), f, c) && (f >= MAX_LINEAS || c >= MAX_LINEAS)) return;
+    this.cambiar((b) => {
+      if (hayHueco(b, f, c)) sacarHueco(b, f, c);
+      else {
+        b.huecos.push([f, c]);
+        b.filas = Math.max(b.filas, f + 1); // tocó la franja ＋ de abajo
+        b.columnas = Math.max(b.columnas, c + 1); // tocó la franja ＋ de la derecha
+      }
+    });
+  }
+
+  protected alternarModoHueco(): void {
+    this.modoHueco.set(!this.modoHueco());
+    this.elegida.set(null);
+    this.menuCab.set(null);
+    this.verPlantilla.set(false);
   }
 
   protected tocarBandeja(): void {

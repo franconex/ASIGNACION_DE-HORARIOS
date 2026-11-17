@@ -76,6 +76,8 @@ export interface Ambiente {
   /** Tamaño de la cuadrícula del croquis (null: acomodo automático de siempre) */
   croquis_filas: number | null;
   croquis_columnas: number | null;
+  /** Lugares vacíos de las mesas: [fila, columna] (puesto sin PC que no corta la mesa) */
+  croquis_huecos?: [number, number][] | null;
 }
 
 export type EstadoPc = 'operativa' | 'inactiva' | 'mantenimiento' | 'baja';
