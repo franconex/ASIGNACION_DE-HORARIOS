@@ -85,13 +85,7 @@ const ESTADOS: { valor: EstadoPc; texto: string; clase: string; punto: string }[
                 <input [id]="'diag-' + x.pc.id" class="campo" maxlength="300" [ngModelOptions]="{ standalone: true }" [(ngModel)]="f.diagnostico" placeholder="Ej: la fuente no entrega voltaje">
               </div>
 
-              <!-- Estado final (con estadoFijo no se elige: ej. al quitar la PC del croquis queda de baja) -->
-              @if (estadoFijo(); as fijo) {
-                <p class="flex items-center gap-1.5 text-sm">
-                  <span class="etiqueta !mb-0">La PC queda:</span>
-                  <span class="h-2.5 w-2.5 rounded-sm" [class]="estado(fijo).punto"></span><b>{{ estado(fijo).texto }}</b>
-                </p>
-              } @else {
+              <!-- Estado final -->
               <div>
                 <p class="etiqueta">¿Cómo queda la PC? *</p>
                 <div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
@@ -104,7 +98,6 @@ const ESTADOS: { valor: EstadoPc; texto: string; clase: string; punto: string }[
                   }
                 </div>
               </div>
-              }
 
               <div>
                 <label class="etiqueta" [attr.for]="'corr-' + x.pc.id">{{ etiquetaCorreccion(f) }}</label>
@@ -145,8 +138,6 @@ export class FichasReparacionComponent implements OnInit {
   readonly pcs = input.required<AmbientePc[]>();
   /** Estado final con que empieza cada ficha nueva (ej. 'baja' al dar de baja) */
   readonly estadoInicial = input<EstadoPc | null>(null);
-  /** Estado final obligatorio: no se muestra para elegir (ej. 'baja' al quitar PCs del croquis) */
-  readonly estadoFijo = input<EstadoPc | null>(null);
 
   private readonly op = inject(OperacionService);
   private readonly catalogos = inject(CatalogosService);
@@ -173,7 +164,7 @@ export class FichasReparacionComponent implements OnInit {
     // Una ficha nueva por cada PC marcada; la primera se abre sola
     effect(() => {
       const pcs = this.pcs();
-      const inicial = this.estadoFijo() ?? this.estadoInicial();
+      const inicial = this.estadoInicial();
       untracked(() => {
         const mapa = new Map(this.porPc());
         let cambio = false;

@@ -6,6 +6,7 @@ import { IconoComponent } from '../../compartido/icono.component';
 import { AgentePcsService } from '../../core/agente-pcs.service';
 import { AuthService } from '../../core/auth.service';
 import { CatalogosService } from '../../core/catalogos.service';
+import { ConfirmacionService } from '../../core/confirmacion.service';
 import { exportarPdf } from '../../core/exportar-pdf';
 import { cabeceraHoja, escaparHtml, FIRMAS_HOJA, imprimirDocumento, TEXTOS_ESTADO_PC } from '../../core/impresion';
 import { AmbientePc, ConexionPc, EstadoPc } from '../../core/modelos';
@@ -17,6 +18,8 @@ const PCS_POR_MESA = 4;
 const MESAS_POR_FILA = 4;
 /** El croquis llega hasta 40 filas y 40 columnas (igual que en la base) */
 const MAX_LINEAS = 40;
+/** Motivo con que queda de baja una PC quitada del croquis */
+const MOTIVO_BAJA_CROQUIS = 'Quitada del croquis del laboratorio';
 
 /** Casilla del croquis: [fila, columna] */
 type Casilla = [number, number];
@@ -348,7 +351,7 @@ export function esPcDocente(pc: AmbientePc): boolean {
                (click)="tocarBandeja()">
             <p class="mb-1 text-[11px] font-semibold text-slate-500">
               Sin ubicar ({{ vista().sinUbicar.length }})
-              @if (editando()) { <span class="font-normal">· arrastra aquí para quitar una PC del plano (al guardar se llena su ficha de baja)</span> }
+              @if (editando()) { <span class="font-normal">· arrastra aquí para quitar una PC del plano (al guardar queda de baja)</span> }
             </p>
             <div class="flex min-h-11 gap-1 overflow-x-auto">
               @for (pc of vista().sinUbicar; track pc.id) {
@@ -368,29 +371,6 @@ export function esPcDocente(pc: AmbientePc): boolean {
               @for (pc of deBaja(); track pc.id) {
                 <div class="w-14 shrink-0 sm:w-24"><ng-container *ngTemplateOutlet="monitor; context: { $implicit: pc, docente: esDocente(pc) }" /></div>
               }
-            </div>
-          </div>
-        }
-
-        <!-- Al guardar el acomodo: ficha de baja de cada PC que se quitó del plano -->
-        @if (editando() && porQuitar(); as q) {
-          <div class="mt-3 rounded-lg border-2 border-rose-300 bg-rose-50/60 p-3">
-            <p class="mb-1 flex items-center gap-2 text-sm font-semibold text-rose-800">
-              <app-icono nombre="alerta" [tamano]="15" />
-              Quitar del croquis · {{ q.length === 1 ? q[0].etiqueta : q.length + ' PCs' }}
-            </p>
-            <p class="mb-2 text-xs text-slate-600">
-              Las PCs que se quitan del plano quedan <b>de baja</b>. Llena la ficha de cada una (queda como mantenimiento correctivo a tu nombre).
-              Si no querías quitarla, vuelve al plano y ponla en su casilla.
-            </p>
-            <div class="rounded-lg bg-superficie p-2">
-              <app-fichas-reparacion [pcs]="q" estadoFijo="baja" />
-            </div>
-            <div class="mt-2 flex justify-end gap-1.5">
-              <button type="button" class="btn-secundario btn-sm" (click)="porQuitar.set(null)" [disabled]="guardandoCroquis()">Volver al plano</button>
-              <button type="button" class="btn-primario btn-sm" [disabled]="guardandoCroquis()" (click)="guardarCroquis()">
-                {{ guardandoCroquis() ? 'Guardando…' : 'Dar de baja y guardar' }}
-              </button>
             </div>
           </div>
         }
@@ -597,6 +577,7 @@ export class LaboratorioCroquisComponent {
   private readonly auth = inject(AuthService);
   private readonly notificaciones = inject(NotificacionesService);
   private readonly operacion = inject(OperacionService);
+  private readonly confirmacion = inject(ConfirmacionService);
   protected readonly agente = inject(AgentePcsService);
 
   readonly ambienteId = input.required<number>();
@@ -688,8 +669,6 @@ export class LaboratorioCroquisComponent {
   protected readonly plantillaMesasFila = signal(MESAS_POR_FILA);
   protected readonly plantillaPasillo = signal(0);
   protected readonly guardandoCroquis = signal(false);
-  /** PCs que se sacaron del plano al acomodar: al guardar se llena su ficha de baja */
-  protected readonly porQuitar = signal<AmbientePc[] | null>(null);
   /** Casilla (o la bandeja) sobre la que está la PC arrastrada */
   protected readonly destino = signal<Casilla2 | 'bandeja' | null>(null, {
     equal: (a, b) => a === b || (typeof a === 'object' && typeof b === 'object' && a?.f === b?.f && a?.c === b?.c),
@@ -776,7 +755,6 @@ export class LaboratorioCroquisComponent {
     this.activa.set(null);
     this.menu.set(null);
     this.porCambiar.set(null);
-    this.porQuitar.set(null);
     this.borrador.set(clonarAcomodo(this.acomodoGuardado()));
     this.historial.set([]);
     this.futuro.set([]);
@@ -791,7 +769,6 @@ export class LaboratorioCroquisComponent {
     this.elegida.set(null);
     this.menuCab.set(null);
     this.verPlantilla.set(false);
-    this.porQuitar.set(null);
   }
 
   /**
@@ -805,25 +782,27 @@ export class LaboratorioCroquisComponent {
   }
 
   /**
-   * Guarda el acomodo. Si se quitaron PCs del plano, primero se pide la
-   * ficha de baja de cada una; con las fichas llenas se dan de baja y
-   * recién después se guarda el croquis.
+   * Guarda el acomodo. Si se quitaron PCs del plano, se confirma una sola
+   * vez y quedan de baja con un motivo por defecto (sin llenar fichas):
+   * salen solas en el cierre de turno de quien guardó.
    */
   protected async guardarCroquis(): Promise<void> {
     const quitadas = this.quitadasDelPlano();
-    const pendientes = this.porQuitar();
-    // Hay PCs quitadas y la ficha no está abierta (o cambió el plano): se muestran sus fichas
-    if (quitadas.length && (!pendientes || pendientes.map((pc) => pc.id).join() !== quitadas.map((pc) => pc.id).join())) {
-      this.porQuitar.set(quitadas);
-      this.elegida.set(null);
-      this.menuCab.set(null);
-      this.verPlantilla.set(false);
-      this.notificaciones.aviso(pendientes
-        ? 'Cambiaste el plano: revisa las fichas de las PCs que se quitan.'
-        : `Quitaste ${quitadas.length === 1 ? quitadas[0].etiqueta : quitadas.length + ' PCs'} del plano: llena la ficha de baja.`);
-      return;
+    if (quitadas.length) {
+      const nombres = quitadas.map((pc) => pc.etiqueta);
+      const ok = await this.confirmacion.pedir({
+        titulo: 'Quitar PCs del croquis',
+        mensaje: `${quitadas.length === 1 ? 'La PC ' + nombres[0] + ' quedará' : quitadas.length + ' PCs quedarán'} de baja.`,
+        consecuencias: [
+          nombres.length > 1 ? 'PCs: ' + (nombres.length > 12 ? nombres.slice(0, 12).join(', ') + '…' : nombres.join(', ')) : '',
+          `Motivo: "${MOTIVO_BAJA_CROQUIS}"`,
+          'Saldrán en tu cierre de turno.',
+          'Si te equivocaste, cancela y vuelve a ponerlas en su casilla.',
+        ].filter(Boolean),
+        aceptar: 'Dar de baja y guardar',
+      });
+      if (!ok) return;
     }
-    if (!quitadas.length) this.porQuitar.set(null);
 
     const a = this.acomodo();
     const posiciones = this.maquinas()
@@ -832,16 +811,10 @@ export class LaboratorioCroquisComponent {
       .map(({ pc, p }) => ({ pc_id: pc.id, fila: p[0], columna: p[1] }));
     this.guardandoCroquis.set(true);
     try {
-      // 1) Dar de baja las PCs quitadas (una ficha por PC)
+      // 1) Dar de baja las PCs quitadas con el motivo por defecto (deja su ticket de cambio de estado)
       if (quitadas.length) {
-        const fichas = this.fichas();
-        const aviso = fichas ? fichas.validar() : 'Llena la ficha de baja de cada PC.';
-        if (aviso) {
-          this.notificaciones.aviso(aviso);
-          return;
-        }
         try {
-          await this.operacion.registrarReparaciones(fichas!.datos());
+          await this.operacion.cambiarEstadoPcs(quitadas.map((pc) => pc.id), 'baja', MOTIVO_BAJA_CROQUIS);
         } catch (e) {
           this.notificaciones.error(e, 'No se dieron de baja las PCs');
           return;
