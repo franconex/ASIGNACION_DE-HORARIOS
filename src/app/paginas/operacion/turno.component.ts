@@ -170,6 +170,12 @@ function horaLaPaz(): string {
             @for (p of misBajas(); track p.etiqueta + p.en) {
               <p class="mt-1 text-xs text-rose-800"><b>{{ p.etiqueta }}</b>{{ p.lab ? ' (' + p.lab + ')' : '' }} — {{ p.motivo || 'sin motivo' }}</p>
             }
+            @if (misReactivadas().length) {
+              <p class="mt-2 text-sm font-medium text-emerald-800">PCs que volvieron a Activa en este turno: {{ misReactivadas().length }}</p>
+              @for (p of misReactivadas(); track p.etiqueta + p.en) {
+                <p class="mt-1 text-xs text-emerald-800"><b>{{ p.etiqueta }}</b>{{ p.lab ? ' (' + p.lab + ')' : '' }} — {{ p.motivo || 'sin detalle' }}</p>
+              }
+            }
             <p class="mt-1 text-[11px] text-slate-500">Se agregan solas al cierre; no hace falta escribirlas.</p>
           </div>
 
@@ -288,6 +294,14 @@ function horaLaPaz(): string {
                 }
               </div>
             }
+            @if (r.pcs_reactivadas?.length) {
+              <div class="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                <p class="font-semibold">PCs que volvieron a Activa en el turno ({{ r.pcs_reactivadas!.length }})</p>
+                @for (p of r.pcs_reactivadas; track p.etiqueta + p.en) {
+                  <p><b>{{ p.etiqueta }}</b>{{ p.lab ? ' (' + p.lab + ')' : '' }} — {{ p.motivo || 'sin detalle' }} · {{ p.en | date: 'HH:mm' }}</p>
+                }
+              </div>
+            }
             @if (r.foto_path && urlsFotos().get(r.foto_path); as url) {
               <a [href]="url" target="_blank" rel="noopener" class="mt-2 inline-flex items-center gap-2 text-xs text-slate-500">
                 <img [src]="url" alt="Foto del armario de llaves" class="h-20 w-20 rounded-md object-cover">
@@ -382,6 +396,8 @@ export class TurnoComponent implements OnInit, OnDestroy {
   protected novedades = '';
   /** PCs que el usuario dio de baja desde que empezó el turno elegido (saldrán en el cierre) */
   protected readonly misBajas = signal<PcBajaCierre[]>([]);
+  /** PCs que el usuario sacó de baja en el turno elegido (también saldrán en el cierre) */
+  protected readonly misReactivadas = signal<PcBajaCierre[]>([]);
   /** Foto del cierre elegida y su vista previa */
   protected readonly foto = signal<File | null>(null);
   protected readonly vistaFoto = signal<string | null>(null);
@@ -433,10 +449,16 @@ export class TurnoComponent implements OnInit, OnDestroy {
   /** Bajas que irán en el cierre: desde el inicio del turno elegido, hoy (La Paz) */
   protected async cargarMisBajas(): Promise<void> {
     const inicio = this.inicioDe(this.turno()) || '00:00';
+    const desde = `${fechaActual(environment.zonaHoraria)}T${inicio}:00-04:00`;
     try {
-      this.misBajas.set(await this.op.misBajasDesde(`${fechaActual(environment.zonaHoraria)}T${inicio}:00-04:00`));
+      this.misBajas.set(await this.op.misBajasDesde(desde));
     } catch {
       this.misBajas.set([]);
+    }
+    try {
+      this.misReactivadas.set(await this.op.misReactivadasDesde(desde));
+    } catch {
+      this.misReactivadas.set([]);
     }
   }
 

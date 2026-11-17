@@ -16,7 +16,7 @@ import { LICENCIAS } from '../../core/software.service';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { SupabaseService } from '../../core/supabase.service';
 import {
-  Dashboard, Detalle, DashSoftware, ESTADOS_PC, Fallas, HorasUso, Indicador, Seccion, SECCIONES, TIPOS, TURNOS, UsoLabs,
+  Dashboard, Detalle, DashSoftware, ESTADOS_PC, Fallas, HorasUso, Indicador, MovimientosPcs,Seccion, SECCIONES, TIPOS, TURNOS, UsoLabs,
   textoCategoriaFalla, textoEstadoPc,
 } from './desempeno-datos';
 import { hojasDesempeno } from './desempeno-excel';
@@ -609,6 +609,51 @@ function rangoMes(mes: string): { desde: string; hasta: string } {
             </details>
           }
 
+          <!-- PCs que salieron de baja (reparadas o devueltas al croquis) y bajas / reactivaciones por persona -->
+          @if (movimientos(); as mv) {
+            <details class="tarjeta plegable mb-3">
+              <summary><span>PCs reactivadas <span class="contador">{{ mv.reactivadas.length }}</span></span><app-icono nombre="abajo" [tamano]="16" class="flecha" /></summary>
+              <div class="overflow-x-auto border-t border-slate-200">
+                <table class="tabla">
+                  <thead><tr><th>PC</th><th>Laboratorio</th><th>Detalle</th><th>Quién</th><th>Cuándo</th></tr></thead>
+                  <tbody>
+                    @for (r of mv.reactivadas; track $index) {
+                      <tr>
+                        <td class="font-mono text-sm font-semibold text-emerald-700">{{ r.etiqueta ?? '—' }}</td>
+                        <td>{{ r.lab ?? '—' }}</td>
+                        <td class="max-w-72 text-sm">{{ r.detalle || '—' }}</td>
+                        <td class="text-sm">{{ r.por ?? '—' }}</td>
+                        <td class="text-sm whitespace-nowrap text-slate-500">{{ r.en | date: 'dd/MM HH:mm' }}</td>
+                      </tr>
+                    } @empty {
+                      <tr><td colspan="5" class="py-6 text-center text-sm text-slate-500">Ninguna PC salió de baja en este periodo.</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </details>
+
+            <details class="tarjeta plegable mb-3">
+              <summary><span>Bajas y reactivaciones por persona <span class="contador">{{ mv.por_persona.length }}</span></span><app-icono nombre="abajo" [tamano]="16" class="flecha" /></summary>
+              <div class="overflow-x-auto border-t border-slate-200">
+                <table class="tabla">
+                  <thead><tr><th>Quién</th><th class="text-right">PCs dadas de baja</th><th class="text-right">PCs reactivadas</th></tr></thead>
+                  <tbody>
+                    @for (p of mv.por_persona; track p.nombre) {
+                      <tr>
+                        <td class="font-medium">{{ p.nombre }}</td>
+                        <td class="text-right tabular-nums" [class.text-rose-700]="p.bajas > 0">{{ p.bajas }}</td>
+                        <td class="text-right tabular-nums" [class.text-emerald-700]="p.reactivadas > 0">{{ p.reactivadas }}</td>
+                      </tr>
+                    } @empty {
+                      <tr><td colspan="3" class="py-6 text-center text-sm text-slate-500">Nadie dio de baja ni reactivó PCs en este periodo.</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          }
+
           @if (fallas(); as fx) {
             <details class="tarjeta plegable mb-3">
               <summary><span>"Otras" fallas escritas a mano <span class="contador">{{ fx.otras.length }}</span></span><app-icono nombre="abajo" [tamano]="16" class="flecha" /></summary>
@@ -1026,6 +1071,8 @@ export class DesempenoComponent implements OnInit {
 
   protected readonly uso = signal<UsoLabs | null>(null);
   protected readonly detalle = signal<Detalle | null>(null);
+  /** Bajas y reactivaciones de PCs (por persona y lista de reactivadas) */
+  protected readonly movimientos = signal<MovimientosPcs | null>(null);
   protected readonly fallas = signal<Fallas | null>(null);
   protected readonly software = signal<DashSoftware | null>(null);
   protected readonly licencias = LICENCIAS;
@@ -1277,6 +1324,7 @@ export class DesempenoComponent implements OnInit {
     this.cargando.set(true);
     void this.cargarUso(desde, hasta, n);
     void this.cargarDetalle(desde, hasta, n);
+    void this.cargarMovimientos(desde, hasta, n);
     void this.cargarFallas(desde, hasta, n);
     void this.cargarSoftware(desde, hasta, n);
     try {
@@ -1313,6 +1361,18 @@ export class DesempenoComponent implements OnInit {
       if (n !== this.consulta) return;
       this.detalle.set(null);
       this.notificaciones.error(e, 'No se cargó el análisis detallado');
+    }
+  }
+
+  /** Bajas y reactivaciones de PCs del período */
+  private async cargarMovimientos(desde: string, hasta: string, n: number): Promise<void> {
+    try {
+      const datos = await this.supabase.rpc<MovimientosPcs>('fn_dashboard_pcs_movimientos', { p_desde: desde, p_hasta: hasta });
+      if (n === this.consulta) this.movimientos.set(datos);
+    } catch (e) {
+      if (n !== this.consulta) return;
+      this.movimientos.set(null);
+      this.notificaciones.error(e, 'No se cargaron las bajas y reactivaciones de PCs');
     }
   }
 

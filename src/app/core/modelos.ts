@@ -412,6 +412,8 @@ export interface ReporteTurno {
   creado_en: string;
   /** PCs que el autor dio de baja durante el turno (las pone la base al cerrar) */
   pcs_baja?: PcBajaCierre[];
+  /** PCs que el autor sacó de baja durante el turno (reparadas o devueltas al croquis) */
+  pcs_reactivadas?: PcBajaCierre[];
   /** Horario que tenía el turno al cerrarse y minutos de retraso del cierre */
   hora_inicio_turno?: string | null;
   hora_fin_turno?: string | null;

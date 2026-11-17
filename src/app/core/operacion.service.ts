@@ -341,6 +341,28 @@ export class OperacionService {
     }));
   }
 
+  /**
+   * PCs que el usuario sacó de baja desde `desde` (mismas reglas que el
+   * cierre de turno: ticket "De baja → …" o correctivo que la sacó de baja)
+   */
+  async misReactivadasDesde(desde: string): Promise<PcBajaCierre[]> {
+    const id = this.auth.perfil()?.id;
+    if (!id) return [];
+    const { data, error } = await this.cliente.from('atenciones')
+      .select('tipo, descripcion, solucion, resuelto_en, estado_anterior, estado_final, pc:ambiente_pcs(etiqueta), ambiente:ambientes(codigo)')
+      .eq('resuelto_por', id).gte('resuelto_en', desde).in('tipo', ['cambio_estado', 'correctivo'])
+      .order('resuelto_en');
+    if (error) throw new ErrorSistema(error);
+    type Fila = {
+      tipo: string; descripcion: string; solucion: string | null; resuelto_en: string;
+      estado_anterior: string | null; estado_final: string | null;
+      pc: { etiqueta: string } | null; ambiente: { codigo: string } | null;
+    };
+    return ((data ?? []) as unknown as Fila[])
+      .filter((a) => a.tipo === 'cambio_estado' ? a.descripcion.includes(': De baja → ') : a.estado_anterior === 'baja' && a.estado_final !== 'baja')
+      .map((a) => ({ etiqueta: a.pc?.etiqueta ?? '—', lab: a.ambiente?.codigo ?? null, motivo: a.solucion ?? a.descripcion, en: a.resuelto_en }));
+  }
+
   /** Comprime y sube la foto del cierre; devuelve la ruta en el bucket */
   private async subirFotoReporte(archivo: File): Promise<string> {
     const blob = await comprimirFoto(archivo);

@@ -62,6 +62,14 @@ export interface Detalle {
   objetos: { registrados: number; entregados: number; en_custodia: number; por_lab: { codigo: string; color: string; objetos: number }[] };
 }
 
+/** Bajas y reactivaciones de PCs del período (fn_dashboard_pcs_movimientos) */
+export interface MovimientosPcs {
+  /** PCs que salieron de baja (reparadas o devueltas al croquis) */
+  reactivadas: { etiqueta: string | null; lab: string | null; detalle: string | null; por: string | null; en: string }[];
+  /** Cuántas PCs dio de baja y cuántas reactivó cada persona */
+  por_persona: { nombre: string; bajas: number; reactivadas: number }[];
+}
+
 /** Lo que devuelve fn_dashboard_software */
 export interface FilaSoftware {
   id: number; nombre: string; tipo: 'programa' | 'iso'; licencia: LicenciaSoftware;
