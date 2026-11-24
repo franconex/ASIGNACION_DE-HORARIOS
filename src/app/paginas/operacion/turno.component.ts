@@ -10,7 +10,7 @@ import { environment } from '../../../environments/environment';
 import { PcBajaCierre, ReporteTurno, RotacionSabado, TareaReporte, TurnoCodigo, TurnoProgramado } from '../../core/modelos';
 import { NotificacionesService } from '../../core/notificaciones.service';
 import { ConfirmacionService } from '../../core/confirmacion.service';
-import { OperacionService, textoRetraso, turnoDeLaHora, turnoDelDia } from '../../core/operacion.service';
+import { OperacionService, TOLERANCIA_CIERRE_MIN, textoRetraso, turnoDeLaHora, turnoDelDia } from '../../core/operacion.service';
 import { fechaActual } from '../../core/fechas';
 
 const TURNOS: { valor: TurnoCodigo; texto: string }[] = [
@@ -100,7 +100,9 @@ function horaLaPaz(): string {
                 } @else if (!enTurno()) {
                   Podrás cerrarlo desde las {{ inicioDe(mio) }}.
                 } @else if (retraso() > 0) {
-                  <span class="font-semibold text-amber-700">Tu turno terminó a las {{ finDe(mio) }}: el cierre quedará con {{ textoRetraso(retraso()) }} de retraso.</span>
+                  <span class="font-semibold text-amber-700">Tu turno terminó a las {{ finDe(mio) }} y pasó la tolerancia (hasta las {{ limiteDe(mio) }}): el cierre quedará con {{ textoRetraso(retraso()) }} de retraso.</span>
+                } @else if (enTolerancia()) {
+                  <span class="font-semibold">Tu turno terminó a las {{ finDe(mio) }}: ciérralo antes de las {{ limiteDe(mio) }} para que no cuente como retraso.</span>
                 } @else {
                   Estás en tu turno: puedes cerrarlo.
                 }
@@ -132,7 +134,11 @@ function horaLaPaz(): string {
           </div>
           @if (retraso() > 0 && !cierreHecho()) {
             <p class="-mt-2 mb-3 flex items-center gap-1 text-xs text-amber-700">
-              <app-icono nombre="alerta" [tamano]="13" /> Este turno terminó a las {{ finDe(turno()) }}: el cierre quedará con {{ textoRetraso(retraso()) }} de retraso.
+              <app-icono nombre="alerta" [tamano]="13" /> Este turno terminó a las {{ finDe(turno()) }} y pasó la tolerancia (hasta las {{ limiteDe(turno()) }}): el cierre quedará con {{ textoRetraso(retraso()) }} de retraso.
+            </p>
+          } @else if (enTolerancia() && !cierreHecho()) {
+            <p class="-mt-2 mb-3 flex items-center gap-1 text-xs text-slate-500">
+              Este turno terminó a las {{ finDe(turno()) }}: puede cerrarse sin retraso hasta las {{ limiteDe(turno()) }}.
             </p>
           }
           }
@@ -368,10 +374,14 @@ export class TurnoComponent implements OnInit, OnDestroy {
     return !!mio && aMinutos(this.ahora()) >= aMinutos(this.inicioDe(mio) || '00:00');
   });
   /** Minutos que ya pasaron desde el fin del turno elegido (0 si aún no termina) */
-  protected readonly retraso = computed(() => {
+  protected readonly pasados = computed(() => {
     const fin = this.finDe(this.turno());
     return fin ? Math.max(0, aMinutos(this.ahora()) - aMinutos(fin)) : 0;
   });
+  /** Retraso con el que quedaría el cierre: 0 dentro de los minutos de tolerancia */
+  protected readonly retraso = computed(() => (this.pasados() > TOLERANCIA_CIERRE_MIN ? this.pasados() : 0));
+  /** El turno ya terminó pero aún está dentro de la tolerancia */
+  protected readonly enTolerancia = computed(() => this.pasados() > 0 && this.retraso() === 0);
   protected readonly puedeCerrar = computed(() => this.auth.puedeOperar() && this.enTurno());
   /** Cierre de hoy del turno elegido, si alguien ya lo hizo (un solo cierre por turno) */
   protected readonly cierreHecho = computed<ReporteTurno | null>(() => {
@@ -468,6 +478,14 @@ export class TurnoComponent implements OnInit, OnDestroy {
 
   protected finDe(turno: TurnoCodigo): string {
     return hhmm(this.op.horarios().find((h) => h.turno === turno)?.hora_fin);
+  }
+
+  /** Hora límite para cerrar sin retraso (fin del turno + tolerancia), 'HH:MM' */
+  protected limiteDe(turno: TurnoCodigo): string {
+    const fin = this.finDe(turno);
+    if (!fin) return '';
+    const m = aMinutos(fin) + TOLERANCIA_CIERRE_MIN;
+    return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   }
 
   /** '07:00 – 12:00' */

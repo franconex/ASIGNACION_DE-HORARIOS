@@ -21,6 +21,9 @@ export function turnoDeLaHora(horarios: HorarioTurno[], hora: string): TurnoCodi
   return (enCurso ?? empezados[0] ?? [...horarios].sort((a, b) => aMinutos(b.hora_inicio) - aMinutos(a.hora_inicio))[0])?.turno ?? null;
 }
 
+/** Minutos de gracia después del fin del turno para cerrarlo sin retraso (igual que en el script 62) */
+export const TOLERANCIA_CIERRE_MIN = 20;
+
 /** 85 -> '1 h 25 min' */
 export function textoRetraso(minutos: number): string {
   const h = Math.floor(minutos / 60);
