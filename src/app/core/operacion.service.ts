@@ -160,6 +160,10 @@ export class OperacionService {
     if (filtro.hasta) q = q.lte('creado_en', `${filtro.hasta}T23:59:59.999-04:00`);
     if (filtro.estado) q = q.eq('estado', filtro.estado);
     if (filtro.ambienteId) q = q.eq('ambiente_id', filtro.ambienteId);
+    // .or() recibe el filtro como texto: solo se acepta un UUID para que no se puedan colar otras condiciones
+    if (filtro.participante && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filtro.participante)) {
+      throw new Error('Participante inválido.');
+    }
     if (filtro.participante) q = q.or(`auxiliar_id.eq.${filtro.participante},colaboradores.cs.{${filtro.participante}}`);
     const { data, error } = await q;
     if (error) throw new ErrorSistema(error);
